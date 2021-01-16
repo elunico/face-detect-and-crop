@@ -45,6 +45,8 @@ def bounding_boxes_for_id(filename: str, classifier: 'cv2.CascadeClassifier') ->
 
     The a List of Tuple is returned because the classifier may detect more than
     1 face in the image
+
+    WARNING: THIS WILL NOT REMOVE bounding boxes less than 10 pixels in EITHER height or width or both
     '''
     # load the photograph
     pixels = cv2.imread(filename)
@@ -56,15 +58,16 @@ def bounding_boxes_for_id(filename: str, classifier: 'cv2.CascadeClassifier') ->
     for i in range(len(bboxes)):
         box = bboxes[i]
         x, y, width, height = box
+        # if width < 10 or height < 10:
+            # continue
         x1, y1, x2, y2 = x, y, x + width, y + height
         x1, y1, x2, y2 = x1 - (width//3), y1 - (height//2), x2 + (width//3), y2 + (height//2)
+        if x1 < 0: x1 = 0
+        if y1 < 0: y1 = 0
+        if x2 >= pixels.shape[1]: x2 = pixels.shape[1] - 1
+        if y2 >= pixels.shape[0]: y2 = pixels.shape[0] - 1
         faces.append((x1, y1, x2, y2))
-        # cropped = img[y:y+height, x:x+width]
-        # cv2.rectangle(pixels, (x1, y1), (x2, y2), (0,0,255), 1)
-        # cv2.imwrite('cropped/')
     return faces
-    # cv2.imshow('face detection', pixels)
-    # cv2.waitKey(0)
 
 def _on_each_box(
             name: str,
@@ -83,7 +86,12 @@ def _on_each_box(
         if show:
             cv2.imshow('Result', result)
             cv2.waitKey(0)
-        cv2.imwrite('{}/{}_face{}{}'.format(outdir, name, i, ext), result)
+        outfile = '{}/{}_face{}{}'.format(outdir, name, i, ext)
+        try:
+            cv2.imwrite(outfile, result)
+        except cv2.error as e:
+            print("Could not write image called {}".format(outfile))
+            print(e.msg)
     return results
 
 def crop_to_boxes(filename: str, boxes: List[Tuple[int, int, int, int]], show: bool = False) -> 'List[cv2.image]':
@@ -128,13 +136,15 @@ def draw_bounding_box(filename: str, boxes: List[Tuple[int, int, int, int]], sho
 
 
 def test():
-    for filename in range(1, 4):
-        name = 'test{}.jpg'.format(filename)
+    for filename in range(1, 12):
+        name = 'test{}.png'.format(filename)
         boxes = bounding_boxes_for_id(name, classifier)
         draw_bounding_box(name, boxes)
 
-def main_for_file(filename, drawOnly: bool = False, show: bool = False):
+def main_for_file(filename, drawOnly: bool = False, show: bool = False, limit: int = 5):
     boxes = bounding_boxes_for_id(filename, classifier)
+    if len(boxes) > limit:
+        print("Warning: file {} -> limit was {} but found {} faces. Taking first {}".format(filename, limit, len(boxes), limit))
     if drawOnly:
         results = draw_bounding_box(filename, boxes, show)
     else:
@@ -147,9 +157,10 @@ def main():
     if options.directory:
         os.chdir(options.directory)
         for filename in os.listdir('.'):
-            main_for_file(filename, options.box, options.show)
+            if not os.path.isdir(filename):
+                main_for_file(filename, options.box, options.show, options.max)
     elif options.file:
-        main_for_file(options.file, options.box, options.show)
+        main_for_file(options.file, options.box, options.show, options.max)
 
 
 
