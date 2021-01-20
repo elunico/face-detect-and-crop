@@ -24,8 +24,9 @@ def parse_args():
 
 def get_name_and_extension(filename):
     if '.' in filename:
-        name, ext = filename.rsplit('.')
+        *name, ext = filename.rsplit('.')
         ext = '.' + ext
+        name = '.'.join(name)
     else:
         name, ext = filename, ''
     return name, ext
