@@ -1,3 +1,5 @@
 .vscode
 venv
 .DS_STORE
+test
+cropped

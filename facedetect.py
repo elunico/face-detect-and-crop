@@ -5,8 +5,11 @@
 
 import cv2
 from typing import List, Tuple, Callable
+from tqdm import tqdm
 import os.path
 import argparse
+
+verbose = False
 
 # load the pre-trained model
 classifier = cv2.CascadeClassifier('model/haarcascade_frontalface_default.xml')
@@ -20,6 +23,8 @@ def parse_args():
     ap.add_argument('-b', '--box', action='store_true', help='Do not crop, but draw the bounding box to the photo and write that out')
     ap.add_argument('-s', '--show', action='store_true', help='Show each image as it is being output')
     ap.add_argument('-n', '--nowrite', action='store_true', help='Perform transformations but do not write files. Implies -s.')
+    ap.add_argument('-v', '--verbose', action='store_true', help='Produce incremental output for monitoring')
+    ap.add_argument('-q', '--quiet', action='store_true', help='Produce no ouptut unless there is an exception')
     return ap.parse_args()
 
 def get_name_and_extension(filename):
@@ -31,9 +36,17 @@ def get_name_and_extension(filename):
         name, ext = filename, ''
     return name, ext
 
-def ensure_dir(dirname):
-    if not os.path.isdir(dirname) and not os.path.exists(dirname):
-        os.mkdir(dirname)
+def path_to_components(path):
+    parts = os.path.split(path)
+    if len(parts) == 1:
+        return '', '/' + parts[0] if path.startswith('/') else '', parts[0]
+    directory = '/'.join(parts[:-1])
+    directory = '/' + directory if path.startswith('/') else directory
+    return directory, parts[-1]
+
+def ensure_dir(dirpath):
+    if not os.path.isdir(dirpath) and not os.path.exists(dirpath):
+        os.mkdir(dirpath)
 
 def highest(value, limit):
     if value > limit:
@@ -45,9 +58,9 @@ def lowest(value, limit):
         value = limit
     return value
 
-def bounding_boxes_for_id(filename: str, classifier: 'cv2.CascadeClassifier') -> List[Tuple[int, int, int, int]]:
+def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> List[Tuple[int, int, int, int]]:
     '''
-    This function receives a filename and a face classifier and returns a list
+    This function receives a path and a face classifier and returns a list
     of 4-ples that contain bounding boxes around faces suitable for use in
     ID Photos (extra space around the face)
 
@@ -61,11 +74,10 @@ def bounding_boxes_for_id(filename: str, classifier: 'cv2.CascadeClassifier') ->
     WARNING: THIS WILL NOT REMOVE bounding boxes less than 10 pixels in EITHER height or width or both
     '''
     # load the photograph
-    pixels = cv2.imread(filename)
+    pixels = cv2.imread(path)
     # perform face detection
     bboxes = classifier.detectMultiScale(pixels)
     # print bounding box for each detected face
-
     faces = []
     for i in range(len(bboxes)):
         box = bboxes[i]
@@ -82,6 +94,7 @@ def bounding_boxes_for_id(filename: str, classifier: 'cv2.CascadeClassifier') ->
     return faces
 
 def _on_each_box(
+            indir: str,
             name: str,
             ext: str,
             boxes: List[Tuple[int, int, int, int]],
@@ -90,9 +103,15 @@ def _on_each_box(
             show: bool = False,
             write: bool = True
         ) -> 'List[cv2.image]':
-    image = cv2.imread(name + ext)
+    vsay(f'[-] Reading image from {os.path.join(indir, name + ext)}...')
+    image = cv2.imread(os.path.join(indir, name + ext))
+    if image is None:
+        vsay(f'[*] Got empty image from path {os.path.join(indir, name + ext)}')
+    else:
+        vsay(f'[-] Got image with dimensions: {image.shape}...')
     results = []
     for i in range(len(boxes)):
+        vsay(f'[-] Processing box {i} of {len(boxes)}...')
         (x1, y1, x2, y2) = boxes[i]
         result = transform(image, x1, y1, x2, y2)
         results.append(result)
@@ -102,13 +121,14 @@ def _on_each_box(
         outfile = '{}/{}_face{}{}'.format(outdir, name, i, ext)
         if write:
             try:
+                vsay(f'[-] Writing result to {outfile}...')
                 cv2.imwrite(outfile, result)
             except cv2.error as e:
-                print("Could not write image called {}".format(outfile))
-                print(e.msg)
+                print("[!] Could not write image called {}".format(outfile), file=sys.stderr)
+                print(e.msg, file=sys.stderr)
     return results
 
-def crop_to_boxes(filename: str, boxes: List[Tuple[int, int, int, int]], show: bool = False, write: bool = True) -> 'List[cv2.image]':
+def crop_to_boxes(path: str, boxes: List[Tuple[int, int, int, int]], show: bool = False, write: bool = True) -> 'List[cv2.image]':
     '''
     This function takes a filename of an image and a list of bounding boxes
     to crop to. It crops the image called filename to the places specified
@@ -121,13 +141,14 @@ def crop_to_boxes(filename: str, boxes: List[Tuple[int, int, int, int]], show: b
     Bounding box should be a 4-ple of (x1, y1, x2, y2) and boxes should be a
     list of bounding box
     '''
+    directory, filename = path_to_components(path)
     name, ext = get_name_and_extension(filename)
     if write:
-        ensure_dir('cropped')
+        vsay(f'[-] Ensuring the existance of {os.path.join(directory, "cropped")} or createing it.')
+        ensure_dir(os.path.join(directory, 'cropped'))
+    _on_each_box(directory, name, ext, boxes, os.path.join(directory, 'cropped'), lambda img, x1, y1, x2, y2: img[y1:y2, x1:x2], show, write)
 
-    _on_each_box(name, ext, boxes, 'cropped', lambda img, x1, y1, x2, y2: img[y1:y2, x1:x2], show, write)
-
-def draw_bounding_box(filename: str, boxes: List[Tuple[int, int, int, int]], show: bool = False, write: bool = True) -> 'List[cv2.image]':
+def draw_bounding_box(path: str, boxes: List[Tuple[int, int, int, int]], show: bool = False, write: bool = True) -> 'List[cv2.image]':
     '''
     This function takes a filename of an image and a list of bounding boxes
     It draws a rectangle around the given bounding box and writes the image out
@@ -139,16 +160,18 @@ def draw_bounding_box(filename: str, boxes: List[Tuple[int, int, int, int]], sho
     Bounding box should be a 4-ple of (x1, y1, x2, y2) and boxes should be a
     list of bounding box
     '''
+    directory, filename = path_to_components(path)
     name, ext = get_name_and_extension(filename)
     if write:
-        ensure_dir('marked')
+        vsay(f'[-] Ensuring the existance of {os.path.join(directory, "marked")} or createing it.')
+        ensure_dir(os.path.join(directory, 'marked'))
 
     def draw_rect(img, x1, y1, x2, y2, color=(0, 0, 255)):
         image = img.copy()
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
         return image
 
-    _on_each_box(name, ext, boxes, 'marked', draw_rect, show, write)
+    _on_each_box(directory, name, ext, boxes, os.path.join(directory, 'marked'), draw_rect, show, write)
 
 
 def test():
@@ -157,27 +180,52 @@ def test():
         boxes = bounding_boxes_for_id(name, classifier)
         draw_bounding_box(name, boxes)
 
-def main_for_file(filename, drawOnly: bool = False, show: bool = False, limit: int = 5, write: bool = True):
-    boxes = bounding_boxes_for_id(filename, classifier)
+def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int = 5, write: bool = True):
+    vsay(f"[-] Computing bounding boxes for {path}...")
+    boxes = bounding_boxes_for_id(path, classifier)
+    vsay(f"[-] Found {len(boxes)} faces in file {path}.")
     if len(boxes) > limit:
-        print("Warning: file {} -> limit was {} but found {} faces. Taking first {}".format(filename, limit, len(boxes), limit))
+        print("[*] Warning: file {} -> limit was {} but found {} faces. Taking first {}".format(filename, limit, len(boxes), limit), file=sys.stderr)
         boxes = boxes[:limit]
     if drawOnly:
-        results = draw_bounding_box(filename, boxes, show, write)
+        vsay(f'[-] Drawing bounding boxes for {path}...')
+        results = draw_bounding_box(path, boxes, show, write)
     else:
-        results = crop_to_boxes(filename, boxes, show, write)
+        vsay(f'[-] Cropping to bounding boxes for {path}...')
+        results = crop_to_boxes(path, boxes, show, write)
     return results
 
+def vsay(msg, end="\n"):
+    if verbose:
+        print(msg, end=end)
+
 def main():
+    global verbose
     options = parse_args()
+    verbose = options.verbose
     limit = options.max
     if options.directory:
         os.chdir(options.directory)
-        for filename in os.listdir('.'):
+        vsay(f'[-] Reading files in {options.directory}...')
+        if options.verbose or options.quiet:
+            iterator = os.listdir('.')
+        else:
+            print(f'Reading files in "{options.directory}"...')
+            iterator = tqdm(os.listdir('.'))
+        for filename in iterator:
+            vsay(f'[-] Reading file {filename}')
             if not os.path.isdir(filename):
                 main_for_file(filename, options.box, options.show or options.nowrite, options.max, not options.nowrite)
+            else:
+                vsay(f"[*] Skipping {filename}: is directory.")
+            vsay('*=' * 2 + f'Done with "{filename}"' + '*=' * 2)
+        vsay('=*' * 40)
+        vsay(f'Done with directory "{options.directory}"'.center(80))
+        vsay('=*' * 40)
     elif options.file:
+        vsay(f"[-] Processing file: {options.file}...")
         main_for_file(options.file, options.box, options.show or options.nowrite, options.max, not options.nowrite)
+        vsay('*=' * 2 + f'Done with "{filename}"' + '*=' * 2)
 
 
 
