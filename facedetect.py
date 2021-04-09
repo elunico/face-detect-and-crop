@@ -11,6 +11,7 @@ import os.path
 import argparse
 import math
 import pprint
+import sys
 
 verbose = False
 
@@ -357,7 +358,7 @@ def main():
     elif options.file:
         vsay(f"[-] Processing file: {options.file}...")
         main_for_file(options.file, options.box, options.show or options.nowrite, options.max, not options.nowrite)
-        vsay('*=' * 2 + f'Done with "{filename}"' + '*=' * 2)
+        vsay('*=' * 2 + f'Done with "{options.file}"' + '*=' * 2)
 
 
 if __name__ == '__main__':
