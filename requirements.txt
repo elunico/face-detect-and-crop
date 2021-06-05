@@ -1,0 +1,15 @@
+astroid==2.4.2
+autopep8==1.5.5
+isort==5.7.0
+lazy-object-proxy==1.4.3
+mccabe==0.6.1
+numpy==1.19.5
+opencv-python==4.5.1.48
+Pillow==8.1.0
+pycodestyle==2.6.0
+pylint==2.6.0
+pythondialog==3.5.1
+six==1.15.0
+toml==0.10.2
+tqdm==4.58.0
+wrapt==1.12.1

@@ -3,3 +3,5 @@ venv
 .DS_STORE
 test
 cropped
+.idea
+__pycache__
