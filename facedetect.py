@@ -50,11 +50,12 @@ def get_name_and_extension(filename):
 
 
 def path_to_components(path):
+    sep = os.path.pathsep
     parts = os.path.split(path)
     if len(parts) == 1:
-        return '', '/' + parts[0] if path.startswith('/') else '', parts[0]
-    directory = '/'.join(parts[:-1])
-    directory = '/' + directory if path.startswith('/') else directory
+        return '', sep + parts[0] if path.startswith(sep) else '', parts[0]
+    directory = sep.join(parts[:-1])
+    directory = sep + directory if path.startswith(sep) else directory
     return directory, parts[-1]
 
 
@@ -332,7 +333,6 @@ def main():
     global verbose, options
     options = parse_args()
     verbose = options.verbose
-    limit = options.max
     if options.directory:
         os.chdir(options.directory)
         vsay(f'[-] Reading files in {options.directory}...')
@@ -345,7 +345,8 @@ def main():
             vsay(f'[-] Reading file {filename}')
             if not os.path.isdir(filename):
                 try:
-                    main_for_file(filename, options.box, options.show or options.nowrite, options.max, not options.nowrite)
+                    main_for_file(filename, drawOnly=options.box, show=options.show or options.nowrite,
+                                  limit=options.max, write=not options.nowrite)
                 except Exception:
                     print("Failed to operate on file '{}'. \nSettings: {}\n\n".format(filename, options))
                     raise
@@ -357,7 +358,8 @@ def main():
         vsay('=*' * 40)
     elif options.file:
         vsay(f"[-] Processing file: {options.file}...")
-        main_for_file(options.file, options.box, options.show or options.nowrite, options.max, not options.nowrite)
+        main_for_file(options.file, drawOnly=options.box, show=options.show or options.nowrite,
+                      limit=options.max, write=not options.nowrite)
         vsay('*=' * 2 + f'Done with "{options.file}"' + '*=' * 2)
 
 
