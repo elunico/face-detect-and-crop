@@ -50,7 +50,7 @@ def get_name_and_extension(filename):
 
 
 def path_to_components(path):
-    sep = os.path.pathsep
+    sep = os.path.sep
     parts = os.path.split(path)
     if len(parts) == 1:
         return '', sep + parts[0] if path.startswith(sep) else '', parts[0]
