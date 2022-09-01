@@ -57,9 +57,9 @@ def parse_args():
 
     action = do_dialog(d.menu, text='Choose options for this program run', width=box_width, height=box_height,
                        choices=[
-                           ('box', 'Take each image and draw a box around the detected face but do not crop'),
-                           ('crop', 'Take each image and crop out each face leaving the dimensions alone'),
-                           ('resize', 'Take each image and crop out each face, and resize the resulting image to 190x237')
+                           ('box', 'Write out 1 image per face with a box around the face'),
+                           ('crop', 'Write out 1 cropped to face image per face detected in the image'),
+                           ('resize', 'Take same as \'crop\' but also resize the resulting cropped image to 190x237')
                        ], help_text='''
                        box
                            This option will find faces in the image and write out one image per face. In each of the images it writes, a red box will be drawn around the area it detected as a face. No other alterations to the image will take place
@@ -125,50 +125,9 @@ def lowest(value, limit):
         value = limit
     return value
 
-
-def flip_flop_maker(flag=True):
-    while True:
-        yield flag
-        flag = not flag
-
-
 def printing(arg):
     print(arg)
     return arg
-
-
-# def smoosh_box(box):
-#     flipflopper = flip_flop_maker()
-#
-#     dwidth = 190
-#     dheight = 237
-#     dratio = dwidth / dheight
-#     x1, y1, x2, y2 = box
-#
-#     awidth = math.dist((x1, y1), (x2, y1))
-#     aheight = math.dist((x1, y1), (x1, y2))
-#     aratio = awidth / aheight
-#     if aratio > dratio:
-#         while aratio > dratio and (y1 - ((aheight * 0.05) + 1)) >= 0 and (y2 + ((aheight * 0.05) + 1)) <= aheight:
-#             if next(flipflopper):
-#                 y2 += ((aheight * 0.05) + 1)
-#             else:
-#                 y1 -= ((aheight * 0.05) + 1)
-#             awidth = math.dist((x1, y1), (x2, y1))
-#             aheight = math.dist((x1, y1), (x1, y2))
-#             aratio = awidth / aheight
-#     if aratio < dratio:
-#         while aratio < dratio and (x1 - ((awidth * 0.05) + 1)) >= 0 and (x2 + ((awidth * 0.05) + 1)) <= awidth:
-#             if next(flipflopper):
-#                 x2 += ((awidth * 0.05) + 1)
-#             else:
-#                 x1 -= ((awidth * 0.05) + 1)
-#             awidth = math.dist((x1, y1), (x2, y1))
-#             aheight = math.dist((x1, y1), (x1, y2))
-#             aratio = awidth / aheight
-#
-#     # return printing(tuple(int(i) for i in (x1, y1, x2, y2)))
-#     return (tuple(int(i) for i in (x1, y1, x2, y2)))
 
 
 def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> List[Tuple[int, int, int, int]]:
