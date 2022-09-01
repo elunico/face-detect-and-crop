@@ -14,7 +14,6 @@ import dialog
 import sys
 from utils import *
 
-
 verbose = False
 
 # load the pre-trained model
@@ -25,29 +24,12 @@ global options
 
 def parse_args():
     global options
-    # ap = argparse.ArgumentParser()
-    # gp = ap.add_mutually_exclusive_group(required=True)
-    # gp.add_argument('-d', '--directory', help='Detect faces and crop all photos in the given directory')
-    # gp.add_argument('-f', '--file', help='Detect faces and crop the given photo')
-    # ap.add_argument('-m', '--max', type=int, default=5, help='The maximum number of faces to extract. Defaults to 5. Use 0 for no limit')
-    # ap.add_argument('-b', '--box', action='store_true', help='Do not crop, but draw the bounding box to the photo and write that out')
-    # ap.add_argument('-s', '--show', action='store_true', help='Show each image as it is being output')
-    # ap.add_argument('-n', '--nowrite', action='store_true', help='Perform transformations but do not write files. Implies -s.')
-    # ap.add_argument('-v', '--verbose', action='store_true', help='Produce incremental output for monitoring')
-    # ap.add_argument('-q', '--quiet', action='store_true', help='Produce no ouptut unless there is an exception')
-    # ap.add_argument('-z', '--squeeze', action='store_true', help='Fit the output boxes to the ASPECT ratio for Rediker by growing boxes until they are the approximate aspect ratio of 190x237 but not NOT actually change the size')
-    # gp = ap.add_mutually_exclusive_group()
-    # gp.add_argument('-p', '--pad', action='store_true', help='Fit the output boxes to the 190x237 shape for Rediker by adding white padding and shrinking. implies -r')
-    # gp.add_argument('-r', '--resize', action='store_true', help='Resize the image to be 190x237 plainly as it is. Can be combined with -z to prevent excess distortion when resizing')
-    # return ap.parse_args()
 
     options = argparse.Namespace(**{
         'file': None,
         'directory': None,
         'output': None,
         'width': None,
-        'directory': None,
-        'file': None,
         'max': None,
         'box': None,
         'show': None,
@@ -59,13 +41,12 @@ def parse_args():
         'resize': None,
     })
 
-    # choice = ('cancel', '')
-
     choice = do_dialog(d.menu, text='Do you want to run the program on all the items of a folder or a single file?',
                        choices=[('dir', 'Entire Folder'), ('file', 'A Single File')])
 
     if choice == 'dir':
-        directory = do_dialog(d.dselect, filepath=os.getcwd(), title='Choose the folder containing the images to process')
+        directory = do_dialog(d.dselect, filepath=os.getcwd(),
+                              title='Choose the folder containing the images to process')
         setattr(options, 'directory', directory)
     else:
         file = do_dialog(d.fselect, filepath=os.getcwd(), title="Choose the image file to process")
@@ -74,17 +55,36 @@ def parse_args():
     max_faces = dialog_int('Enter the maximum number of faces to extract or 0 for no limit (Default 5)', default=5)
     setattr(options, 'max', (max_faces))
 
-    extras = do_dialog(d.checklist, text='Choose options for this program run', width=box_width, height=box_height, choices=[
-        ('box', 'Do not crop, but rather draw a box over faces', False),
-        ('show', 'Display each image on the screen after processing', False),
-        ('nowrite', 'Perform the transformations but do not write out files. Implies `show` option', False),
-        ('squeeze', 'Fit the output face boxes to the ASPECT ratio used by Rediker by growing until they reach the right size', True),
-        ('pad', 'Fit boxes to the 190x237 shape by adding white padding and shrinking. Implies resize', False),
-        ('resize', 'Resize the image to 190x237', True)
-    ])
+    action = do_dialog(d.menu, text='Choose options for this program run', width=box_width, height=box_height,
+                       choices=[
+                           ('box', 'Take each image and draw a box around the detected face but do not crop'),
+                           ('crop', 'Take each image and crop out each face leaving the dimensions alone'),
+                           ('resize', 'Take each image and crop out each face, and resize the resulting image to 190x237')
+                       ], help_text='''
+                       box
+                           This option will find faces in the image and write out one image per face. In each of the images it writes, a red box will be drawn around the area it detected as a face. No other alterations to the image will take place
+                       
+                       crop 
+                           This option will find faces in the image and write out one new image per face, where the image is cropped to the bounding box of the detected face. No other alterations to the image take place
+                       
+                       resize
+                           This option is the same as "crop" but it will also take the image that results from the "crop" option and resize to tbe 190x237 pixles, the exact size of a photo that Rediker uses
+                       ''')
 
-    for opt in extras:
-        setattr(options, opt, True)
+    setattr(options, action, True)
+
+    if 'resize' in action:
+        size_change_option = do_dialog(d.menu, text='Choose a resizing method', choices=[
+            ('pad', 'Pad the image to the correct proportions then shrink to 190x237'),
+            ('plain', 'Stretch or squash the image to fit it to the 190x237 aspect ratio')
+        ], help_text='''
+        pad 
+            This option takes the image and fits a plain white border around it. It will pad the left and right or top and bottom with white pixels until the aspect ratio of 190/x237 is reached. The image will then be shrunk to 190x237 so that no stretching or squashing will occur
+        
+        plain
+            This option does not alter the cropped image and simply resizes it to 190x237 allowing it to be squashed or stretched as needed to fit those dimensions
+        ''')
+        setattr(options, size_change_option, True)
 
     return options
 
@@ -137,38 +137,38 @@ def printing(arg):
     return arg
 
 
-def smoosh_box(box):
-    flipflopper = flip_flop_maker()
-
-    dwidth = 190
-    dheight = 237
-    dratio = dwidth / dheight
-    x1, y1, x2, y2 = box
-
-    awidth = math.dist((x1, y1), (x2, y1))
-    aheight = math.dist((x1, y1), (x1, y2))
-    aratio = awidth / aheight
-    if aratio > dratio:
-        while aratio > dratio and (y1 - ((aheight * 0.05) + 1)) >= 0 and (y2 + ((aheight * 0.05) + 1)) <= aheight:
-            if next(flipflopper):
-                y2 += ((aheight * 0.05) + 1)
-            else:
-                y1 -= ((aheight * 0.05) + 1)
-            awidth = math.dist((x1, y1), (x2, y1))
-            aheight = math.dist((x1, y1), (x1, y2))
-            aratio = awidth / aheight
-    if aratio < dratio:
-        while aratio < dratio and (x1 - ((awidth * 0.05) + 1)) >= 0 and (x2 + ((awidth * 0.05) + 1)) <= awidth:
-            if next(flipflopper):
-                x2 += ((awidth * 0.05) + 1)
-            else:
-                x1 -= ((awidth * 0.05) + 1)
-            awidth = math.dist((x1, y1), (x2, y1))
-            aheight = math.dist((x1, y1), (x1, y2))
-            aratio = awidth / aheight
-
-    # return printing(tuple(int(i) for i in (x1, y1, x2, y2)))
-    return (tuple(int(i) for i in (x1, y1, x2, y2)))
+# def smoosh_box(box):
+#     flipflopper = flip_flop_maker()
+#
+#     dwidth = 190
+#     dheight = 237
+#     dratio = dwidth / dheight
+#     x1, y1, x2, y2 = box
+#
+#     awidth = math.dist((x1, y1), (x2, y1))
+#     aheight = math.dist((x1, y1), (x1, y2))
+#     aratio = awidth / aheight
+#     if aratio > dratio:
+#         while aratio > dratio and (y1 - ((aheight * 0.05) + 1)) >= 0 and (y2 + ((aheight * 0.05) + 1)) <= aheight:
+#             if next(flipflopper):
+#                 y2 += ((aheight * 0.05) + 1)
+#             else:
+#                 y1 -= ((aheight * 0.05) + 1)
+#             awidth = math.dist((x1, y1), (x2, y1))
+#             aheight = math.dist((x1, y1), (x1, y2))
+#             aratio = awidth / aheight
+#     if aratio < dratio:
+#         while aratio < dratio and (x1 - ((awidth * 0.05) + 1)) >= 0 and (x2 + ((awidth * 0.05) + 1)) <= awidth:
+#             if next(flipflopper):
+#                 x2 += ((awidth * 0.05) + 1)
+#             else:
+#                 x1 -= ((awidth * 0.05) + 1)
+#             awidth = math.dist((x1, y1), (x2, y1))
+#             aheight = math.dist((x1, y1), (x1, y2))
+#             aratio = awidth / aheight
+#
+#     # return printing(tuple(int(i) for i in (x1, y1, x2, y2)))
+#     return (tuple(int(i) for i in (x1, y1, x2, y2)))
 
 
 def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> List[Tuple[int, int, int, int]]:
@@ -198,7 +198,7 @@ def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> Lis
         # if width < 10 or height < 10:
         # continue
         x1, y1, x2, y2 = x, y, x + width, y + height
-        x1, y1, x2, y2 = x1 - (width//3), y1 - (height//2), x2 + (width//3), y2 + (height//2)
+        x1, y1, x2, y2 = x1 - (width // 3), y1 - (height // 2), x2 + (width // 3), y2 + (height // 2)
         x1 = lowest(x1, 0)
         y1 = lowest(y1, 0)
         x2 = highest(x2, pixels.shape[1] - 1)
@@ -208,14 +208,14 @@ def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> Lis
 
 
 def _on_each_box(
-    indir: str,
-    name: str,
-    ext: str,
-    boxes: List[Tuple[int, int, int, int]],
-    outdir: str,
-    transform: Callable[['cv2.image', int, int, int, int], 'cv2.image'],
-    show: bool = False,
-    write: bool = True
+        indir: str,
+        name: str,
+        ext: str,
+        boxes: List[Tuple[int, int, int, int]],
+        outdir: str,
+        transform: Callable[['cv2.image', int, int, int, int], 'cv2.image'],
+        show: bool = False,
+        write: bool = True
 ) -> 'List[cv2.image]':
     vsay(f'[-] Reading image from {os.path.join(indir, name + ext)}...')
     image = cv2.imread(os.path.join(indir, name + ext))
@@ -243,49 +243,39 @@ def _on_each_box(
     return results
 
 
-def padded_resize(img, size, padColor=(255, 255, 255)):
-    # https://stackoverflow.com/questions/44720580/resize-image-canvas-to-maintain-square-aspect-ratio-in-python-opencv
+def calculate_padding(img, ratio_size):
     h, w = img.shape[:2]
-    sh, sw = size
+    th, tw = ratio_size
+    goal_aspect = tw / th
+    current_aspect = w / h
 
-    # interpolation method
-    if h > sh or w > sw:  # shrinking image
-        interp = cv2.INTER_AREA
-    else:  # stretching image
-        interp = cv2.INTER_CUBIC
+    padding_height = 0
+    padding_width = 0
+    if goal_aspect > current_aspect:
+        while goal_aspect > current_aspect:
+            padding_width += 1
+            current_aspect = (w + padding_width) / (h + padding_height)
 
-    # aspect ratio of image
-    aspect = w/h  # if on Python 2, you might need to cast as a float: float(w)/h
+    if goal_aspect < current_aspect:
+        while goal_aspect < current_aspect:
+            padding_height += 1
+            current_aspect = (w + padding_width) / (h + padding_height)
 
-    # compute scaling and pad sizing
-    if aspect > 1:  # horizontal image
-        new_w = sw
-        new_h = np.round(new_w/aspect).astype(int)
-        pad_vert = abs((sh-new_h)/2)
-        pad_top, pad_bot = np.floor(pad_vert).astype(int), np.ceil(pad_vert).astype(int)
-        pad_left, pad_right = 0, 0
-    elif aspect < 1:  # vertical image
-        new_h = sh
-        new_w = np.round(new_h*aspect).astype(int)
-        pad_horz = abs((sw-new_w)/2)
-        pad_left, pad_right = np.floor(pad_horz).astype(int), np.ceil(pad_horz).astype(int)
-        pad_top, pad_bot = 0, 0
-    else:  # square image
-        new_h, new_w = sh, sw
-        pad_left, pad_right, pad_top, pad_bot = 0, 0, 0, 0
+    pad_left, pad_right = (padding_width // 2), ((padding_width // 2) + (padding_width % 2))
+    pad_top, pad_bottom = (padding_height // 2), ((padding_height // 2) + (padding_height % 2))
 
-    # set pad color
-    if len(img.shape) == 3 and not isinstance(padColor, (list, tuple, np.ndarray)):  # color image but only one color provided
-        padColor = [padColor]*3
+    return pad_left, pad_right, pad_top, pad_bottom
 
-    # scale and pad
-    scaled_img = cv2.resize(img, (new_w, new_h), interpolation=interp)
-    scaled_img = cv2.copyMakeBorder(scaled_img, pad_top, pad_bot, pad_left, pad_right, borderType=cv2.BORDER_CONSTANT, value=padColor)
 
+def pad_image(img, ratio_size, pad_color=(255, 255, 255)):
+    pad_left, pad_right, pad_top, pad_bottom = calculate_padding(img, ratio_size)
+    scaled_img = cv2.copyMakeBorder(img, pad_top, pad_bottom, pad_left, pad_right, borderType=cv2.BORDER_CONSTANT,
+                                    value=pad_color)
     return scaled_img
 
 
-def crop_to_boxes(path: str, boxes: List[Tuple[int, int, int, int]], show: bool = False, write: bool = True) -> 'List[cv2.image]':
+def crop_to_boxes(path: str, boxes: List[Tuple[int, int, int, int]], show: bool = False,
+                  write: bool = True) -> 'List[cv2.image]':
     '''
     This function takes a filename of an image and a list of bounding boxes
     to crop to. It crops the image called filename to the places specified
@@ -298,11 +288,12 @@ def crop_to_boxes(path: str, boxes: List[Tuple[int, int, int, int]], show: bool 
     Bounding box should be a 4-ple of (x1, y1, x2, y2) and boxes should be a
     list of bounding box
     '''
+
     def cropnshrink(img, x1, y1, x2, y2):
-        assert options.resize
         i = img[y1:y2, x1:x2]
         if options.pad:
-            i = padded_resize(i, (237, 190))
+            i = pad_image(i, (237, 190))
+            i = cv2.resize(i, (190, 237))
         elif options.resize:
             i = cv2.resize(i, (190, 237))
         return i
@@ -316,7 +307,8 @@ def crop_to_boxes(path: str, boxes: List[Tuple[int, int, int, int]], show: bool 
     _on_each_box(directory, name, ext, boxes, os.path.join(directory, 'cropped'), cropnshrink, show, write)
 
 
-def draw_bounding_box(path: str, boxes: List[Tuple[int, int, int, int]], show: bool = False, write: bool = True) -> 'List[cv2.image]':
+def draw_bounding_box(path: str, boxes: List[Tuple[int, int, int, int]], show: bool = False,
+                      write: bool = True) -> 'List[cv2.image]':
     '''
     This function takes a filename of an image and a list of bounding boxes
     It draws a rectangle around the given bounding box and writes the image out
@@ -364,8 +356,9 @@ def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int =
 
     # vsay(f"[-] Found {len(boxes)} faces in file {path}.")
     msg = None
-    if limit > 0 and len(boxes) > limit:
-        msg = "[*] Warning: file {} -> limit was {} but found {} faces. Taking first {}".format(path, limit, len(boxes), limit)
+    if 0 < limit < len(boxes):
+        msg = "[*] Warning: file {} -> limit was {} but found {} faces. Taking first {}".format(path, limit, len(boxes),
+                                                                                                limit)
         boxes = boxes[:limit]
     if len(boxes) == 0:
         return '[!] Error: No faces found in {}'.format(path)
@@ -412,7 +405,9 @@ def main():
                     if msg is not None:
                         d.gauge_update(percentFor(i + 1, total), msg, update_text=True)
                 except Exception:
-                    d.gauge_update(percentFor(i + 1, total), "Failed to operate on file '{}'. \nSettings: {}\n\n".format(filename, options), update_text=True)
+                    d.gauge_update(percentFor(i + 1, total),
+                                   "Failed to operate on file '{}'. \nSettings: {}\n\n".format(filename, options),
+                                   update_text=True)
                     raise
             else:
                 d.gauge_update(percentFor(i + 1, total), f"Skipping {filename}: is directory.", update_text=True)

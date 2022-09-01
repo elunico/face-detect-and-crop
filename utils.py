@@ -11,20 +11,33 @@ def print(*args, **kwargs):
     _old_print(*args, **kwargs)
 
 
-def do_dialog(method, width=None, height=None, **kwargs):
+def do_dialog(method, width=None, height=None, help_text='There is no help available for this screen', **kwargs):
+
     global d
     if method == d.dselect or method == d.fselect:
         height = box_height - 9
     else:
         height = box_height
 
-    result = method(**kwargs, width=box_width, height=height)
-    if result is None:
-        return
-    if result[0] == 'cancel':
-        raise SystemExit("User cancalled in dialog")
-    else:
-        return result[1]
+    sentinel = object()
+    def do_action():
+        result = method(**kwargs, width=box_width, height=height, help_button=True)
+        print(result)
+        if result is None:
+            return
+        if result[0] == 'cancel':
+            raise SystemExit("User cancalled in dialog")
+        elif result[0] == 'help':
+            d.msgbox(text=help_text, width=box_width, height=box_height)
+            return sentinel
+        else:
+            return result[1]
+
+    result = do_action()
+    while result == sentinel:
+        result = do_action()
+
+    return result
 
 
 term_size = get_terminal_size()
