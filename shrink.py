@@ -19,11 +19,12 @@ def get_interactive_args():
                        choices=[('dir', 'Entire Folder'), ('file', 'A Single File')])
 
     if choice == 'dir':
-        directory = do_dialog(d.dselect, filepath=os.getcwd(), title='Choose the folder containing the images to process')
+        directory = do_dialog(d.dselect, filepath=os.getcwd(),
+                              title='Choose the folder containing the images to process')
         setattr(options, 'directory', directory)
     else:
         file = do_dialog(d.fselect, filepath=os.getcwd(), title="Choose the image file to process")
-        setattr(options, 'file', [file])
+        setattr(options, 'file', file)
 
     width = dialog_int('Enter the desired width of the new images')
 
@@ -31,30 +32,11 @@ def get_interactive_args():
 
     if choice == 'dir':
         directory = do_dialog(d.dselect, filepath=os.getcwd(), title="Choose the folder to place the processed image")
-        setattr(options, 'output', directory[1])
+        setattr(options, 'output', directory)
+
+    print(options)
 
     return options
-
-
-def parse_args():
-    # parser = argparse.ArgumentParser(description='Shrink an image')
-    # group = parser.add_mutually_exclusive_group(required=True)
-    # group.add_argument('-d', '--directory', dest='directory', help='Folder to effect all images of')
-    # group.add_argument('-f', '--file', dest='file', nargs='*', help='File(s) to resize')
-    # parser.add_argument('-o', '--output', dest='output', help='Output directory to use')
-    # parser.add_argument('-w', '--width', dest='width', required=True, help='New width for the image, height calculated automatically')
-    # parser.add_argument('-i', '--interactive', action='store_true',help='prompt for answers instead of using the CLI switches')
-
-    # args = parser.parse_args()
-
-    # if args.interactive:
-    #     return get_interactive_args()
-
-    # if args.directory and not args.output:
-    #     parser.error("Cannot specifiy input directory without specifying output directory")
-    # else:
-    #     return args
-    return get_interactive_args()
 
 
 def rename_shrunk(input, width):
@@ -63,36 +45,35 @@ def rename_shrunk(input, width):
     return '.'.join(new_name)
 
 
-# def vsay(msg):
-#     print('[*] ' + str(msg))
-
-
-# def verror(msg):
-#     print('[!] ' + str(msg))
+def resize_image(filename, argwidth, destination):
+    img = cv2.imread(filename)
+    if img is None:
+        return False
+    height, width, _ = img.shape
+    new_height = int(argwidth)
+    new_width = int(width * new_height / height)
+    resized_img = cv2.resize(img, (new_width, new_height))
+    cv2.imwrite(destination, resized_img)
+    return True
 
 
 def main():
-    args = parse_args()
+    args = get_interactive_args()
 
     if args.file:
-        answer = d.yesno('Warning! Files will be overwritten! Continue processing anyway?')
+        answer = d.yesno('Warning! Do you want to overwrite the original file?')
         if answer != d.OK:
-            return
-        total = len(args.file)
-        d.gauge_start('Processing {} files'.format(total))
-        for i, filename in enumerate(args.file):
-            d.gauge_update(percentOf(i, total), text='Processing {}'.format(filename), update_text=True)
-            img = cv2.imread(filename)
-            if img is None:
-                d.gauge_update(percentOf(i, total), text='Error: Could not read image named: {}'.format(filename), update_text=True)
-                continue
-            height, width, _ = img.shape
-            new_height = int(args.width)
-            new_width = int(width * new_height / height)
-            resized_img = cv2.resize(img, (new_width, new_height))
-            cv2.imwrite(filename, resized_img)
-            d.gauge_update(percentOf(i + 1, total), 'Done! {} remaining'.format(total - i - 1))
-        d.gauge_update(100, "All Done!")
+            directory, cfile = os.path.split(os.path.realpath(args.file))
+            output = do_dialog(d.dselect, title="Choose the new output directory for the resulting image. You can specify a different name next",
+                               filepath=directory, help_text='If you do not want the "shrink.py" program to overwrite the existing image file, then you can specify a new path to store the image at. First you should choose the directory to save in on this screen. By default it will put you in the directory where the image is found. Once you select the destination directory, you can then specify a new filename.')
+            dest_name = do_dialog(d.inputbox, text="Enter new name (old name: {})".format(cfile))
+            destination = os.path.join(output, dest_name)
+        else:
+            dest_name = os.path.split(args.file)[1]
+            destination = args.file
+        d.gauge_start(text='Processing {}'.format(args.file))
+        resize_image(args.file, args.width, destination)
+        d.gauge_update(100, 'Done with {}!'.format(dest_name), update_text=True)
         d.gauge_stop()
     elif args.directory:
         outdir = os.path.join(os.path.curdir, args.output)
@@ -109,17 +90,12 @@ def main():
         for (i, path) in enumerate(filenames):
             filename = os.path.join(args.directory, path)
             d.gauge_update(percentOf(i, total), text='Processing: ' + filename, update_text=True)
-            img = cv2.imread(filename)
-            if img is None:
-                d.gauge_update(percentOf(i, total), text='Error: Could not read image named: {}'.format(filename), update_text=True)
-                continue
-            height, width, _ = img.shape
-            new_height = int(args.width)
-            new_width = int(width * new_height / height)
-            resized_img = cv2.resize(img, (new_width, new_height))
             new_name = rename_shrunk(path, args.width)
             new_file = os.path.join(outdir, new_name)
-            cv2.imwrite(new_file, resized_img)
+            result = resize_image(filename, args.width, new_file)
+            if not result:
+                d.gauge_update(percentOf(i, total), text='Error: Could not read image named: {}'.format(filename),
+                               update_text=True)
         d.gauge_update(100, text="Done", update_text=True)
         d.gauge_stop()
     else:

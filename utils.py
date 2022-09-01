@@ -11,7 +11,7 @@ def print(*args, **kwargs):
     _old_print(*args, **kwargs)
 
 
-def do_dialog(method, width=None, height=None, help_text='There is no help available for this screen', **kwargs):
+def do_dialog(method, width=None, height=None, help_text='', **kwargs):
 
     global d
     if method == d.dselect or method == d.fselect:
@@ -21,7 +21,7 @@ def do_dialog(method, width=None, height=None, help_text='There is no help avail
 
     sentinel = object()
     def do_action():
-        result = method(**kwargs, width=box_width, height=height, help_button=True)
+        result = method(**kwargs, width=box_width, height=height, help_button=not not help_text)
         print(result)
         if result is None:
             return
