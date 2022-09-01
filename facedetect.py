@@ -308,10 +308,6 @@ def test():
 def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int = 5, write: bool = True):
     vsay(f"[-] Computing bounding boxes for {path}...")
     boxes = bounding_boxes_for_id(path, classifier)
-    for i in range(len(boxes)):
-        # fit the boxes to an aspect ratio without loosing information (expand boxes)
-        if options.squeeze:
-            boxes[i] = smoosh_box(boxes[i])
 
     # vsay(f"[-] Found {len(boxes)} faces in file {path}.")
     msg = None
@@ -341,11 +337,31 @@ def percentFor(i, total):
 
 
 def main():
+    show_dialog(d.yesno, title="Welcome to facedetect", text='''
+    This program will help you extract faces from an image or a folder of many images.
+    You can have the program draw boxes around faces, show but not write out the final images, crop, and even resize 
+    the cropped images. 
+    
+    You will be guided through the process in a series of steps using interactive dialogs 
+    
+    ** INSTRUCTIONS FOR USE**
+    1) You may type to enter text in any text box. 
+    2) Use the tab key to change between buttons on the bottom
+    3) When selecting a file or a folder, a selection screen will appear. You can use tab to move to each pane and 
+    \t- You should use the spacebar to select files/folders. 
+    \tIt is important that you DO NOT HIT OK until you have used the space bar to select the desired file or folder and see its name in the box 
+    4) A help button will appear when help is available. Use tab to select and enter to press it 
+    5) Pressing cancel at any time will terminate the program completely and you will have to start over. 
+    
+    Would you like to continue using this program?
+    ''')
     global verbose, options
     options = parse_args()
     verbose = options.verbose
     if options.directory:
         os.chdir(options.directory)
+        show_dialog(d.yesno, title="{} ready".format(options.directory), text="Program is ready to detect faces in {}\nResults will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(options.directory))
+
         show_dialog(d.infobox, text=f'Reading files in {options.directory}...')
         if options.verbose or options.quiet:
             iterator = os.listdir('.')
@@ -375,6 +391,7 @@ def main():
         d.gauge_stop()
     elif options.file:
         # vsay(f"[-] Processing file: {options.file}...")
+        show_dialog(d.yesno, title="{} ready".format(options.directory), text="Program is ready to detect faces in {}. Results will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(options.file))
         show_dialog(d.infobox, text=f"Processing file: {options.file}...")
         main_for_file(options.file, drawOnly=options.box, show=options.show or options.nowrite,
                       limit=options.max, write=not options.nowrite)

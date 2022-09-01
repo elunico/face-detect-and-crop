@@ -58,19 +58,40 @@ def resize_image(filename, argwidth, destination):
 
 
 def main():
+    show_dialog(d.yesno, title="Welcome to shrink", text='''
+        This program will help you shrink an image file to the correct size for Rediker's photo system. It is worth 
+        noting that the facedetect program can do this automatically when detecting faces, however, you can also do it 
+        manually here
+
+        You will be guided through the process in a series of steps using interactive dialogs 
+
+        ** INSTRUCTIONS FOR USE**
+        1) You may type to enter text in any text box. 
+        2) Use the tab key to change between buttons on the bottom
+        3) When selecting a file or a folder, a selection screen will appear. You can use tab to move to each pane and 
+        \t- You should use the spacebar to select files/folders. 
+        \tIt is important that you DO NOT HIT OK until you have used the space bar to select the desired file or folder and see its name in the box 
+        4) A help button will appear when help is available. Use tab to select and enter to press it 
+        5) Pressing cancel at any time will terminate the program completely and you will have to start over. 
+
+        Would you like to continue using this program?
+        ''')
     args = get_interactive_args()
 
     if args.file:
         answer = d.yesno('Warning! Do you want to overwrite the original file?')
         if answer != d.OK:
             directory, cfile = os.path.split(os.path.realpath(args.file))
-            output = show_dialog(d.dselect, title="Choose the new output directory for the resulting image. You can specify a different name next",
-                                 filepath=directory, help_text='If you do not want the "shrink.py" program to overwrite the existing image file, then you can specify a new path to store the image at. First you should choose the directory to save in on this screen. By default it will put you in the directory where the image is found. Once you select the destination directory, you can then specify a new filename.')
+            output = show_dialog(d.dselect,
+                                 title="Choose the new output directory for the resulting image. You can specify a different name next",
+                                 filepath=directory,
+                                 help_text='If you do not want the "shrink.py" program to overwrite the existing image file, then you can specify a new path to store the image at. First you should choose the directory to save in on this screen. By default it will put you in the directory where the image is found. Once you select the destination directory, you can then specify a new filename.')
             dest_name = show_dialog(d.inputbox, text="Enter new name (old name: {})".format(cfile))
             destination = os.path.join(output, dest_name)
         else:
             dest_name = os.path.split(args.file)[1]
             destination = args.file
+        show_dialog(d.yesno, title="{} ready to be shrunk".format(args.file), text="Program is ready to shrink {} into {} with width {}.\nContinue?".format(args.file, destination, args.width))
         d.gauge_start(text='Processing {}'.format(args.file))
         resize_image(args.file, args.width, destination)
         d.gauge_update(100, 'Done with {}!'.format(dest_name), update_text=True)
@@ -83,7 +104,7 @@ def main():
         elif os.path.exists(outdir) and not os.path.isdir(outdir):
             raise TypeError('Output is not a directory')
 
-        show_dialog(d.msgbox, text="Program will begin shrink on directory {}".format(args.directory))
+        show_dialog(d.yesno, title="Ready to begin shrinking", text="Program will begin shrinking images in directory {}\nShrunken image files will have {} appended to their name and be placed in {}.\nIf files matching this pattern exist, they WILL BE OVERWRITTEN\nContinue?".format(args.directory, args.width,outdir))
         filenames = os.listdir(args.directory)
         total = len(filenames)
         d.gauge_start('Processing {} files'.format(total))
