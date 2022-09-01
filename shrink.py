@@ -3,6 +3,7 @@ import cv2
 import os.path
 import dialog
 import os
+from utils import *
 
 d = dialog.Dialog()
 
@@ -14,35 +15,22 @@ def percentOf(value, total):
 def get_interactive_args():
     options = argparse.Namespace(**{'file': None, 'directory': None, 'output': None, 'width': None})
 
-    choice = ('cancel', '')
+    choice = do_dialog(d.menu, text='Do you want to run the program on all the items of a folder or a single file?',
+                       choices=[('dir', 'Entire Folder'), ('file', 'A Single File')])
 
-    while choice[0] == 'cancel':
-        choice = d.menu('Do you want to run the program on all the items of a folder or a single file?',
-                        choices=[('dir', 'Entire Folder'), ('file', 'A Single File')])
-    if choice[1] == 'dir':
-        directory = d.dselect(os.getcwd(), title='Choose the folder containing the images to process')
-        assert directory[0] != d.CANCEL
-        setattr(options, 'directory', directory[1])
+    if choice == 'dir':
+        directory = do_dialog(d.dselect, filepath=os.getcwd(), title='Choose the folder containing the images to process')
+        setattr(options, 'directory', directory)
     else:
-        file = d.fselect(os.getcwd(), title="Choose the image file to process")
-        assert file[0] != d.CANCEL
-        setattr(options, 'file', [file[1]])
+        file = do_dialog(d.fselect, filepath=os.getcwd(), title="Choose the image file to process")
+        setattr(options, 'file', file)
 
-    width = None
+    width = dialog_int('Enter the desired width of the new images')
 
-    while True:
-        try:
-            w = int(width)
-        except (ValueError, TypeError):
-            width = d.inputbox('Enter the width in pixels of the new image')[1]
-        else:
-            break
+    setattr(options, 'width', str(width))
 
-    setattr(options, 'width', str(w))
-
-    if choice[1] == 'dir':
-        directory = d.dselect(os.getcwd(), title="Choose the folder to place the processed image")
-        assert directory[0] != d.CANCEL
+    if choice == 'dir':
+        directory = do_dialog(d.dselect, filepath=os.getcwd(), title="Choose the folder to place the processed image")
         setattr(options, 'output', directory[1])
 
     return options
@@ -109,12 +97,12 @@ def main():
     elif args.directory:
         outdir = os.path.join(os.path.curdir, args.output)
         if not os.path.exists(outdir) and not os.path.isdir(outdir):
-            d.msgbox('Output directory does not exist, it will be created')
+            do_dialog(d.msgbox, text='Output directory does not exist, it will be created')
             os.makedirs(outdir)
         elif os.path.exists(outdir) and not os.path.isdir(outdir):
             raise TypeError('Output is not a directory')
 
-        d.msgbox("Program will begin shrink on directory {}".format(args.directory))
+        do_dialog(d.msgbox, text="Program will begin shrink on directory {}".format(args.directory))
         filenames = os.listdir(args.directory)
         total = len(filenames)
         d.gauge_start('Processing {} files'.format(total))
