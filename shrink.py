@@ -23,7 +23,7 @@ def get_interactive_args():
         setattr(options, 'directory', directory)
     else:
         file = do_dialog(d.fselect, filepath=os.getcwd(), title="Choose the image file to process")
-        setattr(options, 'file', file)
+        setattr(options, 'file', [file])
 
     width = dialog_int('Enter the desired width of the new images')
 
