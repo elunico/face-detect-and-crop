@@ -3,30 +3,33 @@ import dialog
 
 d = dialog.Dialog()
 
-_old_print = print
+term_size = get_terminal_size()
+
+if term_size.columns < 60 or term_size.lines < 20:
+    raise OSError("Your terminal must be at least 40x20")
+
+box_width = max(term_size.columns - 6, 50)
+box_height = max(term_size.lines - 6, 16)
 
 
-def print(*args, **kwargs):
-    # _old_print(inspect.getouterframes(inspect.currentframe()))
-    _old_print(*args, **kwargs)
-
-
-def do_dialog(method, width=None, height=None, help_text='', **kwargs):
-
+def show_dialog(method, width=None, height=None, help_text='', **kwargs):
     global d
     if method == d.dselect or method == d.fselect:
         height = box_height - 9
     else:
         height = box_height
 
+    if width is None:
+        width = box_width
+
     sentinel = object()
+
     def do_action():
-        result = method(**kwargs, width=box_width, height=height, help_button=not not help_text)
-        print(result)
+        result = method(**kwargs, width=width, height=height, help_button=not not help_text)
         if result is None:
             return
         if result[0] == 'cancel':
-            raise SystemExit("User cancalled in dialog")
+            raise SystemExit("User cancelled in dialog")
         elif result[0] == 'help':
             d.msgbox(text=help_text, width=box_width, height=box_height)
             return sentinel
@@ -40,16 +43,7 @@ def do_dialog(method, width=None, height=None, help_text='', **kwargs):
     return result
 
 
-term_size = get_terminal_size()
-
-if (term_size.columns < 60 or term_size.lines < 20):
-    raise OSError("Your terminal must be at least 40x20")
-
-box_width = max(term_size.columns - 6, 50)
-box_height = max(term_size.lines - 6, 16)
-
-
-def dialog_int(message, default=None):
+def dialog_get_int(message, default=None):
     val = None
 
     while True:

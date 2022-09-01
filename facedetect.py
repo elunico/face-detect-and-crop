@@ -41,22 +41,22 @@ def parse_args():
         'resize': None,
     })
 
-    choice = do_dialog(d.menu, text='Do you want to run the program on all the items of a folder or a single file?',
-                       choices=[('dir', 'Entire Folder'), ('file', 'A Single File')])
+    choice = show_dialog(d.menu, text='Do you want to run the program on all the items of a folder or a single file?',
+                         choices=[('dir', 'Entire Folder'), ('file', 'A Single File')])
 
     if choice == 'dir':
-        directory = do_dialog(d.dselect, filepath=os.getcwd(),
-                              title='Choose the folder containing the images to process')
+        directory = show_dialog(d.dselect, filepath=os.getcwd(),
+                                title='Choose the folder containing the images to process')
         setattr(options, 'directory', directory)
     else:
-        file = do_dialog(d.fselect, filepath=os.getcwd(), title="Choose the image file to process")
+        file = show_dialog(d.fselect, filepath=os.getcwd(), title="Choose the image file to process")
         setattr(options, 'file', file)
 
-    max_faces = dialog_int('Enter the maximum number of faces to extract or 0 for no limit (Default 5)', default=5)
+    max_faces = dialog_get_int('Enter the maximum number of faces to extract or 0 for no limit (Default 5)', default=5)
     setattr(options, 'max', (max_faces))
 
-    action = do_dialog(d.menu, text='Choose options for this program run', width=box_width, height=box_height,
-                       choices=[
+    action = show_dialog(d.menu, text='Choose options for this program run', width=box_width, height=box_height,
+                         choices=[
                            ('box', 'Write out 1 image per face with a box around the face'),
                            ('crop', 'Write out 1 cropped to face image per face detected in the image'),
                            ('resize', 'Take same as \'crop\' but also resize the resulting cropped image to 190x237')
@@ -74,7 +74,7 @@ def parse_args():
     setattr(options, action, True)
 
     if 'resize' in action:
-        size_change_option = do_dialog(d.menu, text='Choose a resizing method', choices=[
+        size_change_option = show_dialog(d.menu, text='Choose a resizing method', choices=[
             ('pad', 'Pad the image to the correct proportions then shrink to 190x237'),
             ('plain', 'Stretch or squash the image to fit it to the 190x237 aspect ratio')
         ], help_text='''
@@ -346,7 +346,7 @@ def main():
     verbose = options.verbose
     if options.directory:
         os.chdir(options.directory)
-        do_dialog(d.infobox, text=f'Reading files in {options.directory}...')
+        show_dialog(d.infobox, text=f'Reading files in {options.directory}...')
         if options.verbose or options.quiet:
             iterator = os.listdir('.')
         else:
@@ -375,10 +375,10 @@ def main():
         d.gauge_stop()
     elif options.file:
         # vsay(f"[-] Processing file: {options.file}...")
-        do_dialog(d.infobox, text=f"Processing file: {options.file}...")
+        show_dialog(d.infobox, text=f"Processing file: {options.file}...")
         main_for_file(options.file, drawOnly=options.box, show=options.show or options.nowrite,
                       limit=options.max, write=not options.nowrite)
-        do_dialog(d.infobox, text=f'Done with "{options.file}"')
+        show_dialog(d.infobox, text=f'Done with "{options.file}"')
 
 
 if __name__ == '__main__':
