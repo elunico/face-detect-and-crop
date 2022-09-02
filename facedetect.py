@@ -2,20 +2,18 @@
 # https://www.geeksforgeeks.org/python-opencv-cv2-imwrite-method/
 # https://stackoverflow.com/questions/15589517/how-to-crop-an-image-in-opencv-using-python
 # https://docs.opencv.org/3.1.0/d7/d8b/tutorial_py_face_detection.html#gsc.tab=0
-import threading
-from os import get_terminal_size
-from tkinter.ttk import Combobox
-
-import numpy as np
-import cv2
-from typing import List, Tuple, Callable, Generic, TypeVar, Optional
-import os.path
 import argparse
 import math
+import os.path
 import sys
+import threading
 from tkinter import *
 from tkinter import filedialog, StringVar
 from tkinter import messagebox
+from typing import List, Tuple, Callable, Optional
+from guitils import GUIProgress
+
+import cv2
 
 verbose = False
 
@@ -102,7 +100,7 @@ class GetParameters:
         try:
             facevar.get()
         except Exception:
-            return 
+            return
         setattr(self.namespace, 'max', facevar.get())
         setattr(self.namespace, actionvar.get(), True)
         if actionvar.get() == 'resize':
@@ -133,7 +131,7 @@ class GetParameters:
             helpwin.mainloop()
 
         if not container.was_set:
-            messagebox.showerror('No Directory Selected', 'You must select a directory before continuing')
+            messagebox.showerror('No Selection', 'You must select a file/directory before continuing')
             return
 
         window = self.spawn_window()
@@ -178,8 +176,31 @@ class GetParameters:
         button.pack()
         root.mainloop()
 
-    def run_file(self, parent):
-        pass
+    def choose_file(self, parent, container):
+        file = filedialog.askopenfilename(initialdir=os.path.realpath('.'), title="Choose images directory")
+        if file == '':
+            return
+        container.set(file)
+        self.namespace.file = file
+        container.was_set = True
+        parent.update()
+        return container
+
+    def run_file(self):
+        root = self.spawn_window()
+        root.title('Choose file for processing')
+
+        l = Label(root, text="Select the file that you want to process")
+        container = StringVar(root)
+        container.was_set = False
+        dlabel = Label(root, textvariable=container)
+        select = Button(root, text="Select File", command=lambda: self.choose_file(root, container))
+        button = Button(root, text='Next', command=lambda: self.select_parameters(container))
+        l.pack()
+        dlabel.pack()
+        select.pack()
+        button.pack()
+        root.mainloop()
 
     def finalize(self, resize_strategy):
         if resize_strategy is not None:
@@ -492,49 +513,57 @@ def main():
                 text="Program is ready to detect faces in {}\nResults will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(
                     options.directory))
 
-        infobox(text=f'Reading files in {options.directory}...')
         iterator = (os.listdir('.'))
         total = len(iterator)
-        infobox(
-            text='Working on files in {}\nPlease close this window and wait until the dialog confirmating the program finished'.format(
-                options.directory))
-        for (i, filename) in enumerate(iterator):
-            # vsay(f'[-] Reading file {filename}')
-            # d.gauge_update(percentFor(i, total), text='Reading file {}'.format(filename), update_text=True)
-            if not os.path.isdir(filename):
-                try:
-                    msg = main_for_file(filename, drawOnly=options.box, show=options.show,
-                                        limit=options.max)
-                    # threading.Thread(daemon=True, target=lambda: infobox(text="Processing {}".format(filename))).start()
-                    if msg is not None:
-                        pass
-                        threading.Thread(daemon=True, target=lambda: infobox(title='Failed on file',
-                                                                             text='Failed to process {}: {}'.format(
-                                                                                 filename, msg))).start()
-                        # d.gauge_update(percentFor(i + 1, total), msg, update_text=True)
-                except Exception as e:
-                    # d.gauge_update(percentFor(i + 1, total),
-                    #                "Failed to operate on file '{}'. \nSettings: {}\n\n".format(filename, options),
-                    #                update_text=True)
-                    infobox(title="ERROR", text="An error has occurred:\n{}".format(str(e)))
-                    # raise
-            else:
-                pass
-                # d.gauge_update(percentFor(i + 1, total), f"Skipping {filename}: is directory.", update_text=True)
-            # d.gauge_update(percentFor(i + 1, total), f'Done with "{filename}"' + '*=' * 2, update_text=True)
-        # d.gauge_update(100, f'Done with "{options.directory}"', update_text=True)
-        # d.gauge_stop()
+        g = GUIProgress('Working on {}'.format(options.directory), total=total,
+                        title="Face Extractor Program Running...",
+                        main_label='Running face extractor on {}'.format(options.directory))
+
+        def closure():
+            for (i, filename) in enumerate(iterator):
+                g.update(i, text='Reading file {}'.format(filename))
+                if not os.path.isdir(filename):
+                    try:
+                        print('Doing {}'.format(filename))
+                        msg = main_for_file(filename, drawOnly=options.box, show=options.show,
+                                            limit=options.max)
+
+                        if msg is not None:
+                            pass
+                            g.update(i, msg)
+                    except Exception as e:
+                        g.update(0, 'A critical error has occurred on file {}'.format(filename))
+                        g.done()
+                        infobox(title="ERROR", text="An error has occurred processing {}:\n{}".format(filename, str(e)))
+                        raise
+                else:
+                    pass
+
+            print("Done")
+            g.done()
+
+        thread = threading.Thread(daemon=True, target=closure)
+        thread.start()
+        g.start()
+
         infobox(title="Finished!", text="The program has completed processing {}".format(options.directory))
     elif options.file:
-        # vsay(f"[-] Processing file: {options.file}...")
-        yesorno(title="{} ready".format(options.directory),
+        yesorno(title="{} ready".format(options.file),
                 text="Program is ready to detect faces in {}. Results will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(
                     options.file))
-        infobox(text=f"Processing file: {options.file}...")
-        main_for_file(options.file, drawOnly=options.box, show=options.show,
-                      limit=options.max)
+
+        label_text = 'Processing file {}'.format(options.file)
+        g = GUIProgress(label_text, 1, label_text, label_text)
+        def closure():
+            main_for_file(options.file, drawOnly=options.box, show=options.show,
+                          limit=options.max)
+            g.done()
+
+        thread = threading.Thread(daemon=True, target=closure)
+        thread.start()
+        g.start()
         infobox(text=f'Done with "{options.file}"')
-    input("The program has completed. Press any key to close")
+    # input("The program has completed. Press any key to close")
 
 
 if __name__ == '__main__':
@@ -542,4 +571,4 @@ if __name__ == '__main__':
         main()
     except Exception as e:
         print(e)
-        input("Error")
+        input("There was an error. Press any key to exit")
