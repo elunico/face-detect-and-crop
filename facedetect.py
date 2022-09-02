@@ -4,88 +4,188 @@
 # https://docs.opencv.org/3.1.0/d7/d8b/tutorial_py_face_detection.html#gsc.tab=0
 
 from os import get_terminal_size
+from tkinter.ttk import Combobox
+
 import numpy as np
 import cv2
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Generic, TypeVar, Optional
 import os.path
 import argparse
 import math
-import dialog
 import sys
-from utils import *
+from tkinter import *
+from tkinter import filedialog, StringVar
+from tkinter import messagebox
 
 verbose = False
 
 # load the pre-trained model
 classifier = cv2.CascadeClassifier('model/haarcascade_frontalface_default.xml')
 
-global options
+
+class GetParameters:
+
+    def spawn_window(self):
+        window = Tk()
+        self.windows.append(window)
+        return window
+
+    def __init__(self):
+        self.windows = []
+        self.namespace = argparse.Namespace(**{
+            'file': None,
+            'directory': None,
+            'max': None,
+            'box': None,
+            'show': None,
+            'resize': None,
+            'plain': None,
+            'pad': None,
+        })
+        t = self.spawn_window()
+        t.title('Face Extractor Program')
+        intro = Label(t,
+                      text="Welcome to the face extractor program\nThis program will allow you to extract faces from images.\nSelect below to start")
+        db = Button(t, text="Run on a whole directory", command=self.run_directory)
+        fb = Button(t, text="Run on a single file", command=self.run_file)
+        intro.pack()
+        fb.pack()
+        db.pack()
+        t.mainloop()
+
+    def choose_dir(self, root, container: StringVar) -> Optional[StringVar]:
+        dir = filedialog.askdirectory(initialdir=os.path.realpath('.'), title="Choose images directory")
+        if dir == '':
+            return
+        container.set(dir)
+        self.namespace.directory = dir
+        container.was_set = True
+        root.update()
+        return container
+
+    def get_resize_strategy(self):
+        def help():
+            helpwin = self.spawn_window()
+            helpwin.title('Help for Operation Parameters')
+            label = Label(helpwin, text='''
+            pad 
+                This option takes the image and fits a plain white border around it. 
+                It will pad the left and right or top and bottom with white pixels until the aspect ratio of 190/x237 is reached. 
+                The image will then be shrunk to 190x237 so that no stretching or squashing will occur
+            
+            plain
+                This option does not alter the cropped image and simply resizes it to 190x237 
+                allowing it to be squashed or stretched as needed to fit those dimensions
+            ''')
+            label.pack()
+            helpwin.mainloop()
+
+        window = self.spawn_window()
+        window.title("Choose resize strategy")
+
+        label = Label(window, text='Choose the resize strategy')
+
+        choices = ['pad', 'plain']
+        variable = StringVar(window)
+        variable.set('pad')
+
+        w = OptionMenu(window, variable, *choices)
+        help = Button(window, text="Show Help", command=help)
+        go = Button(window, text="Go", command=lambda: self.finalize(variable))
+        label.pack()
+        w.pack()
+        go.pack()
+        help.pack()
+        window.mainloop()
+
+    def run_dir_action(self, actionvar, facevar):
+        setattr(self.namespace, 'max', facevar.get())
+        setattr(self.namespace, actionvar.get(), True)
+        if actionvar.get() == 'resize':
+            self.get_resize_strategy()
+        else:
+            self.finalize(None)
+
+    def select_parameters(self, container):
+        def help():
+            helpwin = self.spawn_window()
+            helpwin.title('Help for Operation Parameters')
+            label = Label(helpwin, text='''
+    box
+       This option will find faces in the image and write out one image per face. 
+       In each of the images it writes, a red box will be drawn around the area it detected as a face. 
+       No other alterations to the image will take place
+    
+    crop 
+       This option will find faces in the image and write out one new image per face, 
+       where the image is cropped to the bounding box of the detected face. 
+       No other alterations to the image take place
+    
+    resize
+       This option is the same as "crop" but it will also take the image that results from the "crop" option and 
+       resize to tbe 190x237 pixles, the exact size of a photo that Rediker uses
+    ''')
+            label.pack()
+            helpwin.mainloop()
+
+        if not container.was_set:
+            messagebox.showerror('No Directory Selected', 'You must select a directory before continuing')
+            return
+
+        window = self.spawn_window()
+        window.title('Select Operation Parameters')
+
+        label = Label(window, text='Choose the operation to perform on each image')
+
+        choices = ['box', 'crop', 'resize']
+        actionvar = StringVar(window)
+        actionvar.set('resize')
+
+        w = OptionMenu(window, actionvar, *choices)
+
+        label2 = Label(window, text="Specify the max number of faces the \nprogram should look for per image")
+        facevar = IntVar(window)
+        facevar.set(5)
+        faceentry = Entry(window, textvariable=facevar)
+
+        help = Button(window, text="Show Help", command=help)
+        go = Button(window, text="Go", command=lambda: self.run_dir_action(actionvar, facevar))
+        label.pack()
+        w.pack()
+        go.pack()
+        help.pack()
+        window.mainloop()
+
+    def run_directory(self):
+        root = self.spawn_window()
+        root.title('Choose directory for source images')
+
+        l = Label(root, text="Select the directory containing the images to process")
+        container = StringVar(root)
+        container.was_set = False
+        dlabel = Label(root, textvariable=container)
+        select = Button(root, text="Select Dir", command=lambda: self.choose_dir(root, container))
+        button = Button(root, text='Next', command=lambda: self.select_parameters(container))
+        l.pack()
+        dlabel.pack()
+        select.pack()
+        button.pack()
+        root.mainloop()
+
+    def run_file(self, parent):
+        pass
+
+    def finalize(self, resize_strategy):
+        if resize_strategy is not None:
+            setattr(self.namespace, resize_strategy.get(), True)
+
+        for window in self.windows:
+            window.destroy()
 
 
 def parse_args():
     global options
-
-    options = argparse.Namespace(**{
-        'file': None,
-        'directory': None,
-        'output': None,
-        'width': None,
-        'max': None,
-        'box': None,
-        'show': None,
-        'nowrite': None,
-        'verbose': None,
-        'quiet': None,
-        'squeeze': None,
-        'pad': None,
-        'resize': None,
-    })
-
-    choice = show_dialog(d.menu, text='Do you want to run the program on all the items of a folder or a single file?',
-                         choices=[('dir', 'Entire Folder'), ('file', 'A Single File')])
-
-    if choice == 'dir':
-        directory = show_dialog(d.dselect, filepath=os.getcwd(),
-                                title='Choose the folder containing the images to process')
-        setattr(options, 'directory', directory)
-    else:
-        file = show_dialog(d.fselect, filepath=os.getcwd(), title="Choose the image file to process")
-        setattr(options, 'file', file)
-
-    max_faces = dialog_get_int('Enter the maximum number of faces to extract or 0 for no limit (Default 5)', default=5)
-    setattr(options, 'max', (max_faces))
-
-    action = show_dialog(d.menu, text='Choose options for this program run', width=box_width, height=box_height,
-                         choices=[
-                           ('box', 'Write out 1 image per face with a box around the face'),
-                           ('crop', 'Write out 1 cropped to face image per face detected in the image'),
-                           ('resize', 'Take same as \'crop\' but also resize the resulting cropped image to 190x237')
-                       ], help_text='''
-                       box
-                           This option will find faces in the image and write out one image per face. In each of the images it writes, a red box will be drawn around the area it detected as a face. No other alterations to the image will take place
-                       
-                       crop 
-                           This option will find faces in the image and write out one new image per face, where the image is cropped to the bounding box of the detected face. No other alterations to the image take place
-                       
-                       resize
-                           This option is the same as "crop" but it will also take the image that results from the "crop" option and resize to tbe 190x237 pixles, the exact size of a photo that Rediker uses
-                       ''')
-
-    setattr(options, action, True)
-
-    if 'resize' in action:
-        size_change_option = show_dialog(d.menu, text='Choose a resizing method', choices=[
-            ('pad', 'Pad the image to the correct proportions then shrink to 190x237'),
-            ('plain', 'Stretch or squash the image to fit it to the 190x237 aspect ratio')
-        ], help_text='''
-        pad 
-            This option takes the image and fits a plain white border around it. It will pad the left and right or top and bottom with white pixels until the aspect ratio of 190/x237 is reached. The image will then be shrunk to 190x237 so that no stretching or squashing will occur
-        
-        plain
-            This option does not alter the cropped image and simply resizes it to 190x237 allowing it to be squashed or stretched as needed to fit those dimensions
-        ''')
-        setattr(options, size_change_option, True)
-
+    options = GetParameters().namespace
     return options
 
 
@@ -124,6 +224,7 @@ def lowest(value, limit):
     if value < limit:
         value = limit
     return value
+
 
 def printing(arg):
     print(arg)
@@ -336,66 +437,92 @@ def percentFor(i, total):
     return int((i / total) * 100)
 
 
+def yesorno(title, text):
+    window = Tk()
+    window.title(title)
+    # window.attributes('-disabled', True)
+    label = Label(window, text=text)
+    result = {'status': 'cancel'}
+    ok = Button(window, text="OK", command=lambda: result.__setitem__('status', 'ok') or window.destroy())
+    cancel = Button(window, text="Cancel", command=lambda: result.__setitem__('status', 'cancel') or window.destroy())
+    label.pack()
+    ok.pack()
+    cancel.pack()
+    window.mainloop()
+    if result['status'] == 'cancel':
+        exit()
+
+
+def infobox(title='', text=''):
+    messagebox.showinfo(title, text)
+
+
 def main():
-    show_dialog(d.yesno, title="Welcome to facedetect", text='''
+    yesorno(title="Welcome to facedetect", text='''
     This program will help you extract faces from an image or a folder of many images.
-    You can have the program draw boxes around faces, show but not write out the final images, crop, and even resize 
-    the cropped images. 
-    
-    You will be guided through the process in a series of steps using interactive dialogs 
-    
+    You can have the program draw boxes around faces, show but not write out the final images, crop, and even resize
+    the cropped images.
+
+    You will be guided through the process in a series of steps using interactive dialogs
+
     ** INSTRUCTIONS FOR USE**
-    1) You may type to enter text in any text box. 
+    1) You may type to enter text in any text box.
     2) Use the tab key to change between buttons on the bottom
-    3) When selecting a file or a folder, a selection screen will appear. You can use tab to move to each pane and 
-    \t- You should use the spacebar to select files/folders. 
-    \tIt is important that you DO NOT HIT OK until you have used the space bar to select the desired file or folder and see its name in the box 
-    4) A help button will appear when help is available. Use tab to select and enter to press it 
-    5) Pressing cancel at any time will terminate the program completely and you will have to start over. 
-    
+    3) When selecting a file or a folder, a selection screen will appear. You can use tab to move to each pane and
+    \t- You should use the spacebar to select files/folders.
+    \tIt is important that you DO NOT HIT OK until you have used the space bar to select the desired file or folder and see its name in the box
+    4) A help button will appear when help is available. Use tab to select and enter to press it
+    5) Pressing cancel at any time will terminate the program completely and you will have to start over.
+
     Would you like to continue using this program?
     ''')
     global verbose, options
+    print("Giot this far")
     options = parse_args()
-    verbose = options.verbose
     if options.directory:
         os.chdir(options.directory)
-        show_dialog(d.yesno, title="{} ready".format(options.directory), text="Program is ready to detect faces in {}\nResults will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(options.directory))
+        yesorno(title="{} ready".format(options.directory),
+                text="Program is ready to detect faces in {}\nResults will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(
+                    options.directory))
 
-        show_dialog(d.infobox, text=f'Reading files in {options.directory}...')
+        infobox(text=f'Reading files in {options.directory}...')
         if options.verbose or options.quiet:
             iterator = os.listdir('.')
         else:
             # print(f'Working on files in: "{options.directory}"...')
             iterator = (os.listdir('.'))
         total = len(iterator)
-        d.gauge_start('Working on files in {}'.format(options.directory))
+        infobox('Working on files in {}'.format(options.directory))
         for (i, filename) in enumerate(iterator):
             # vsay(f'[-] Reading file {filename}')
-            d.gauge_update(percentFor(i, total), text='Reading file {}'.format(filename), update_text=True)
+            # d.gauge_update(percentFor(i, total), text='Reading file {}'.format(filename), update_text=True)
             if not os.path.isdir(filename):
                 try:
                     msg = main_for_file(filename, drawOnly=options.box, show=options.show or options.nowrite,
                                         limit=options.max, write=not options.nowrite)
                     if msg is not None:
-                        d.gauge_update(percentFor(i + 1, total), msg, update_text=True)
+                        pass
+                        # d.gauge_update(percentFor(i + 1, total), msg, update_text=True)
                 except Exception:
-                    d.gauge_update(percentFor(i + 1, total),
-                                   "Failed to operate on file '{}'. \nSettings: {}\n\n".format(filename, options),
-                                   update_text=True)
+                    # d.gauge_update(percentFor(i + 1, total),
+                    #                "Failed to operate on file '{}'. \nSettings: {}\n\n".format(filename, options),
+                    #                update_text=True)
                     raise
             else:
-                d.gauge_update(percentFor(i + 1, total), f"Skipping {filename}: is directory.", update_text=True)
-            d.gauge_update(percentFor(i + 1, total), f'Done with "{filename}"' + '*=' * 2, update_text=True)
-        d.gauge_update(100, f'Done with "{options.directory}"', update_text=True)
-        d.gauge_stop()
+                pass
+                # d.gauge_update(percentFor(i + 1, total), f"Skipping {filename}: is directory.", update_text=True)
+            # d.gauge_update(percentFor(i + 1, total), f'Done with "{filename}"' + '*=' * 2, update_text=True)
+        # d.gauge_update(100, f'Done with "{options.directory}"', update_text=True)
+        # d.gauge_stop()
     elif options.file:
         # vsay(f"[-] Processing file: {options.file}...")
-        show_dialog(d.yesno, title="{} ready".format(options.directory), text="Program is ready to detect faces in {}. Results will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(options.file))
-        show_dialog(d.infobox, text=f"Processing file: {options.file}...")
+        yesorno(title="{} ready".format(options.directory),
+                text="Program is ready to detect faces in {}. Results will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(
+                    options.file))
+        infobox(text=f"Processing file: {options.file}...")
         main_for_file(options.file, drawOnly=options.box, show=options.show or options.nowrite,
                       limit=options.max, write=not options.nowrite)
-        show_dialog(d.infobox, text=f'Done with "{options.file}"')
+        infobox(text=f'Done with "{options.file}"')
 
 
 if __name__ == '__main__':
