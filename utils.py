@@ -28,7 +28,7 @@ def show_dialog(method, width=None, height=None, help_text='', **kwargs):
         result = method(**kwargs, width=width, height=height, help_button=not not help_text)
         if result is None:
             return
-        if result[0] == 'cancel':
+        if result[0] == 'cancel' or result == 'cancel':
             raise SystemExit("User cancelled in dialog")
         elif result[0] == 'help':
             d.msgbox(text=help_text, width=box_width, height=box_height)

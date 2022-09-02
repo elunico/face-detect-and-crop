@@ -3,15 +3,14 @@
 # https://stackoverflow.com/questions/15589517/how-to-crop-an-image-in-opencv-using-python
 # https://docs.opencv.org/3.1.0/d7/d8b/tutorial_py_face_detection.html#gsc.tab=0
 
-from os import get_terminal_size
-import numpy as np
-import cv2
-from typing import List, Tuple, Callable
-import os.path
 import argparse
-import math
-import dialog
+import os.path
 import sys
+from typing import List, Tuple, Callable
+
+import cv2
+import math
+
 from utils import *
 
 verbose = False
