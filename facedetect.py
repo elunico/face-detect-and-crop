@@ -99,6 +99,10 @@ class GetParameters:
         window.mainloop()
 
     def run_dir_action(self, actionvar, facevar):
+        try:
+            facevar.get()
+        except Exception:
+            return 
         setattr(self.namespace, 'max', facevar.get())
         setattr(self.namespace, actionvar.get(), True)
         if actionvar.get() == 'resize':
@@ -152,6 +156,8 @@ class GetParameters:
         go = Button(window, text="Go", command=lambda: self.run_dir_action(actionvar, facevar))
         label.pack()
         w.pack()
+        label2.pack()
+        faceentry.pack()
         go.pack()
         help.pack()
         window.mainloop()
@@ -499,7 +505,7 @@ def main():
                 try:
                     msg = main_for_file(filename, drawOnly=options.box, show=options.show,
                                         limit=options.max)
-                    threading.Thread(daemon=True, target=lambda: infobox(text="Processing {}".format(filename))).start()
+                    # threading.Thread(daemon=True, target=lambda: infobox(text="Processing {}".format(filename))).start()
                     if msg is not None:
                         pass
                         threading.Thread(daemon=True, target=lambda: infobox(title='Failed on file',
