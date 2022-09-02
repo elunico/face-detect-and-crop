@@ -8,3 +8,7 @@ __pycache__
 test/cropped
 test/marked
 test/out
+*.exe
+dist/
+build/
+facedetect.spec

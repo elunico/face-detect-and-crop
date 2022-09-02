@@ -2,7 +2,7 @@
 # https://www.geeksforgeeks.org/python-opencv-cv2-imwrite-method/
 # https://stackoverflow.com/questions/15589517/how-to-crop-an-image-in-opencv-using-python
 # https://docs.opencv.org/3.1.0/d7/d8b/tutorial_py_face_detection.html#gsc.tab=0
-
+import threading
 from os import get_terminal_size
 from tkinter.ttk import Combobox
 
@@ -180,6 +180,7 @@ class GetParameters:
             setattr(self.namespace, resize_strategy.get(), True)
 
         for window in self.windows:
+            print(window)
             window.destroy()
 
 
@@ -450,7 +451,7 @@ def yesorno(title, text):
     cancel.pack()
     window.mainloop()
     if result['status'] == 'cancel':
-        exit()
+        raise SystemExit()
 
 
 def infobox(title='', text=''):
@@ -486,44 +487,53 @@ def main():
                     options.directory))
 
         infobox(text=f'Reading files in {options.directory}...')
-        if options.verbose or options.quiet:
-            iterator = os.listdir('.')
-        else:
-            # print(f'Working on files in: "{options.directory}"...')
-            iterator = (os.listdir('.'))
+        iterator = (os.listdir('.'))
         total = len(iterator)
-        infobox('Working on files in {}'.format(options.directory))
+        infobox(
+            text='Working on files in {}\nPlease close this window and wait until the dialog confirmating the program finished'.format(
+                options.directory))
         for (i, filename) in enumerate(iterator):
             # vsay(f'[-] Reading file {filename}')
             # d.gauge_update(percentFor(i, total), text='Reading file {}'.format(filename), update_text=True)
             if not os.path.isdir(filename):
                 try:
-                    msg = main_for_file(filename, drawOnly=options.box, show=options.show or options.nowrite,
-                                        limit=options.max, write=not options.nowrite)
+                    msg = main_for_file(filename, drawOnly=options.box, show=options.show,
+                                        limit=options.max)
+                    threading.Thread(daemon=True, target=lambda: infobox(text="Processing {}".format(filename))).start()
                     if msg is not None:
                         pass
+                        threading.Thread(daemon=True, target=lambda: infobox(title='Failed on file',
+                                                                             text='Failed to process {}: {}'.format(
+                                                                                 filename, msg))).start()
                         # d.gauge_update(percentFor(i + 1, total), msg, update_text=True)
-                except Exception:
+                except Exception as e:
                     # d.gauge_update(percentFor(i + 1, total),
                     #                "Failed to operate on file '{}'. \nSettings: {}\n\n".format(filename, options),
                     #                update_text=True)
-                    raise
+                    infobox(title="ERROR", text="An error has occurred:\n{}".format(str(e)))
+                    # raise
             else:
                 pass
                 # d.gauge_update(percentFor(i + 1, total), f"Skipping {filename}: is directory.", update_text=True)
             # d.gauge_update(percentFor(i + 1, total), f'Done with "{filename}"' + '*=' * 2, update_text=True)
         # d.gauge_update(100, f'Done with "{options.directory}"', update_text=True)
         # d.gauge_stop()
+        infobox(title="Finished!", text="The program has completed processing {}".format(options.directory))
     elif options.file:
         # vsay(f"[-] Processing file: {options.file}...")
         yesorno(title="{} ready".format(options.directory),
                 text="Program is ready to detect faces in {}. Results will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(
                     options.file))
         infobox(text=f"Processing file: {options.file}...")
-        main_for_file(options.file, drawOnly=options.box, show=options.show or options.nowrite,
-                      limit=options.max, write=not options.nowrite)
+        main_for_file(options.file, drawOnly=options.box, show=options.show,
+                      limit=options.max)
         infobox(text=f'Done with "{options.file}"')
+    input("The program has completed. Press any key to close")
 
 
 if __name__ == '__main__':
-    exit(main())
+    try:
+        main()
+    except Exception as e:
+        print(e)
+        input("Error")
