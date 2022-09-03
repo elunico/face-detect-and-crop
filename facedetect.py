@@ -7,6 +7,7 @@ import math
 import os.path
 import sys
 import threading
+import time
 from tkinter import *
 from tkinter import filedialog, StringVar
 from tkinter import messagebox
@@ -282,6 +283,8 @@ def printing(arg):
     print(arg)
     return arg
 
+class NotAnImageError(OSError):
+    pass
 
 def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> List[Tuple[int, int, int, int]]:
     '''
@@ -300,6 +303,8 @@ def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> Lis
     '''
     # load the photograph
     pixels = cv2.imread(path)
+    if pixels is None:
+        raise NotAnImageError
     # perform face detection
     bboxes = classifier.detectMultiScale(pixels)
     # print bounding box for each detected face
@@ -332,7 +337,7 @@ def _on_each_box(
     vsay(f'[-] Reading image from {os.path.join(indir, name + ext)}...')
     image = cv2.imread(os.path.join(indir, name + ext))
     if image is None:
-        vsay(f'[*] Got empty image from path {os.path.join(indir, name + ext)}')
+        raise NotAnImageError
     else:
         vsay(f'[-] Got image with dimensions: {image.shape}...')
     results = []
@@ -508,6 +513,15 @@ def yesorno(title, text):
 def infobox(title='', text=''):
     messagebox.showinfo(title, text)
 
+class SimpleContainer:
+    def __init__(self, value):
+        self.value = value
+
+    def set(self, value):
+        self.value =value
+
+    def get(self):
+        return self.value
 
 def main():
     yesorno(title="Welcome to facedetect", text='''
@@ -538,12 +552,14 @@ def main():
 
         iterator = (os.listdir('.'))
         total = len(iterator)
-        g = GUIProgress('Working on {}'.format(options.directory), total=total,
-                        title="Face Extractor Program Running...",
-                        main_label='Running face extractor on {}'.format(options.directory))
 
+        job_gate_variable = SimpleContainer(True)
         def closure():
             for (i, filename) in enumerate(iterator):
+                if not job_gate_variable.get():
+                    g.update(i, 'Job Cancelled!')
+                    print("Cancelled")
+                    return
                 g.update(i, text='Reading file {}'.format(filename))
                 if not os.path.isdir(filename):
                     try:
@@ -554,6 +570,9 @@ def main():
                         if msg is not None:
                             pass
                             g.update(i, msg)
+                    except NotAnImageError as e:
+                        g.update(i, 'File {} is not an image. Skipping...'.format(filename))
+                        time.sleep(0.1)
                     except Exception as e:
                         g.update(0, 'A critical error has occurred on file {}'.format(filename))
                         g.done()
@@ -566,10 +585,14 @@ def main():
             g.done()
 
         thread = threading.Thread(daemon=True, target=closure)
+        g = GUIProgress('Working on {}'.format(options.directory), total=total,
+                        title="Face Extractor Program Running...",
+                        main_label='Running face extractor on {}'.format(options.directory),
+                        job_gate_variable=job_gate_variable, thread=thread)
         thread.start()
         g.start()
-
-        infobox(title="Finished!", text="The program has completed processing {}".format(options.directory))
+        if job_gate_variable.get(): # if cancelled don't show the finished message
+            infobox(title="Finished!", text="The program has completed processing {}".format(options.directory))
     elif options.file:
         yesorno(title="{} ready".format(options.file),
                 text="Program is ready to detect faces in {}. Results will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(

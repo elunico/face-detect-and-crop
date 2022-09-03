@@ -1,12 +1,17 @@
 from tkinter import *
+from tkinter import messagebox
+
+
 class GUIProgress:
-    def __init__(self, text, total, title, main_label):
+    def __init__(self, text, total, title, main_label, job_gate_variable, thread):
         self.window = Tk()
         self.window.protocol("WM_DELETE_WINDOW", lambda: ...)
         # self.window.overrideredirect(True)
         self.window.title(title)
         self.window.eval('tk::PlaceWindow . center')
 
+        self.keepgoing = job_gate_variable
+        self.thread = thread
         self.current = 0
         self.total = total
         self._done = False
@@ -18,11 +23,22 @@ class GUIProgress:
         self.status_label = Label(self.window, text='Processing {} of {}'.format(self.current, self.total),
                                   font=("Arial", 24))
         self.label = Label(self.window, textvariable=self.text, font=('Arial', 24))
+        self.stop_button = Button(self.window, text='Cancel Processing', command=self._cancel_job)
 
         self.top_label.pack(padx=10, pady=10)
         self.status_label.pack(padx=10, pady=10)
         self.label.pack(padx=10, pady=10)
+        self.stop_button.pack()
         self.job = self.window.after((1000 // 20), self.check_update)
+
+    def _cancel_job(self):
+        if messagebox.askyesno("Stop Job", "Are you sure you want to stop the current process?"):
+            self.window.after_cancel(self.job)
+            self.keepgoing.set(False)
+            self.window.destroy()
+            messagebox.showwarning("Cancelled", "The program was cancelled")
+            self.thread.join()
+
 
     def check_update(self):
         if self._done:
