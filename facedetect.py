@@ -8,7 +8,6 @@ import os.path
 import sys
 import threading
 import time
-import uuid
 from tkinter import *
 from tkinter import filedialog, StringVar
 from tkinter import messagebox
@@ -63,7 +62,11 @@ class GetParameters:
             'resize': None,
             'plain': None,
             'pad': None,
+            'multiplier': None,
+            'user_cancelled': True
         })
+        self.actionvar = None
+        self.m = None
         t = self.spawn_window()
         t.title('Face Extractor Program')
         intro = Label(t,
@@ -92,18 +95,21 @@ class GetParameters:
         root.update()
         return container
 
-    def set_parameters(self, actionvar, facevar):
+    def set_parameters(self, actionvar, facevar, multvar):
         try:
             facevar.get()
         except Exception:
             return
         setattr(self.namespace, 'max', facevar.get())
         action, *resize = actionvar.get().split(' ')
+        print(action, resize)
         if resize:
             setattr(self.namespace, 'resize', True)
             setattr(self.namespace, action, True)
         else:
             setattr(self.namespace, action, True)
+
+        setattr(self.namespace, 'multiplier', int(multvar.get()[0]))
 
         self.finalize()
 
@@ -132,6 +138,17 @@ class GetParameters:
        two more tasks. First, it takes the image and adds white borders around the outside as needed until its aspect
        ratio is proportional to 190x237. It then shrinks the resulting image to 190x237 exactly. This prevents the 
        squishing and stretching in the plain-resize option but does waste some space with the borders
+    
+    Max number of faces
+       Sometimes the program will detect parts of an image as a face that are not really faces. This can result in the 
+       'wrong' part of an image being extracting. Setting the number of faces greater than 1 means if the program 
+       detects many faces in 1 image it can output 1 file for each face. However, the more output, the more files, and
+       the longer the program takes. If the program detects less than max faces it will simply output 1 file for each 
+       detected face
+       
+    Size Multiplier 
+       If using the one of the "resize" option, this option determines what multiple of the Rediker resolution (190x237) is used
+       This can be helpful for lower qualilty or very disproportionate images. 
     ''')
             label.pack(padx=2, pady=2)
             helpwin.mainloop()
@@ -145,26 +162,45 @@ class GetParameters:
 
         label = Label(window, text='Choose the operation to perform on each image')
 
-        choices = ['box', 'crop', 'plain resize', 'padded resize']
-        actionvar = StringVar(window)
-        actionvar.set('padded resize')
+        choices = ['box', 'crop', 'plain resize', 'pad resize']
+        self.actionvar = StringVar(window)
+        self.actionvar.set('pad resize')
+        self.actionvar.trace('w', lambda *args: self.update_disabled())
 
-        w = OptionMenu(window, actionvar, *choices)
+        w = OptionMenu(window, self.actionvar, *choices)
 
         label2 = Label(window, text="Specify the max number of faces the \nprogram should look for per image")
         facevar = IntVar(window)
         facevar.set(5)
         faceentry = Entry(window, textvariable=facevar)
 
+        choices2 = ['1x', '2x', '3x', '4x']
+        multvar = StringVar(window)
+        multvar.set('1x')
+        label3 = Label(window, text="Specify Rediker size multiplier")
+
+        self.m = OptionMenu(window, multvar, *choices2)
+
+
         help = Button(window, text="Show Help", command=help)
-        go = Button(window, text="Go", command=lambda: self.set_parameters(actionvar, facevar))
-        label.pack(padx=2, pady=2)
-        w.pack(padx=2, pady=2)
+        go = Button(window, text="Go", command=lambda: self.set_parameters(self.actionvar, facevar, multvar))
         label2.pack(padx=2, pady=2)
         faceentry.pack(padx=2, pady=2)
+        label.pack(padx=2, pady=2)
+        w.pack(padx=2, pady=2)
+        label3.pack(padx=2, pady=2)
+        self.m.pack(padx=2, pady=2)
         go.pack(padx=2, pady=2)
         help.pack(padx=2, pady=2)
         window.mainloop()
+
+    def update_disabled(self):
+        if self.actionvar is not None and 'resize' in self.actionvar.get():
+            self.m.config(state='normal')
+            # self.m.pack()
+        elif self.actionvar is not None:
+            # self.m.pack_forget()
+            self.m.config(state='disabled')
 
     def choose_target_file(self, parent, container):
         file = filedialog.askopenfilename(initialdir=os.path.realpath('.'), title="Choose image file")
@@ -177,6 +213,7 @@ class GetParameters:
         return container
 
     def finalize(self):
+        self.namespace.user_cancelled = False
         for window in self.windows:
             print(window)
             try:
@@ -342,8 +379,12 @@ def pad_image(img, ratio_size, pad_color=(255, 255, 255)):
     return scaled_img
 
 
+def transpose(pair):
+    return pair[1], pair[0]
+
+
 def crop_to_boxes(path: str, boxes: List[Tuple[int, int, int, int]], show: bool = False,
-                  write: bool = True) -> 'List[cv2.image]':
+                  write: bool = True, multiplier = 1) -> 'List[cv2.image]':
     '''
     This function takes a filename of an image and a list of bounding boxes
     to crop to. It crops the image called filename to the places specified
@@ -357,13 +398,16 @@ def crop_to_boxes(path: str, boxes: List[Tuple[int, int, int, int]], show: bool 
     list of bounding box
     '''
 
+    dest_size = (190 * multiplier, 237 * multiplier)
+
+
     def cropnshrink(img, x1, y1, x2, y2):
         i = img[y1:y2, x1:x2]
         if options.pad:
-            i = pad_image(i, (237, 190))
-            i = cv2.resize(i, (190, 237))
+            i = pad_image(i, transpose(dest_size))
+            i = cv2.resize(i, dest_size)
         elif options.resize:
-            i = cv2.resize(i, (190, 237))
+            i = cv2.resize(i, dest_size)
         return i
 
     directory, filename = path_to_components(path)
@@ -414,7 +458,7 @@ def test():
         draw_bounding_box(name, boxes)
 
 
-def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int = 5, write: bool = True):
+def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int = 5, write: bool = True, multiplier = 1):
     vsay(f"[-] Computing bounding boxes for {path}...")
     boxes = bounding_boxes_for_id(path, classifier)
 
@@ -428,7 +472,7 @@ def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int =
     if drawOnly:
         draw_bounding_box(path, boxes, show, write)
     else:
-        crop_to_boxes(path, boxes, show, write)
+        crop_to_boxes(path, boxes, show, write, multiplier)
 
     return msg
 
@@ -450,26 +494,10 @@ def main():
     
     Do you accept the terms?
     ''', once_identifier='9e0ecb73-7e83-4c9e-b294-59b7a2b2db5c')
-    yesorno(title="Welcome to facedetect", text='''
-    This program will help you extract faces from an image or a folder of many images.
-    You can have the program draw boxes around faces, show but not write out the final images, crop, and even resize
-    the cropped images.
-
-    You will be guided through the process in a series of steps using interactive dialogs
-
-    ** INSTRUCTIONS FOR USE**
-    1) You may type to enter text in any text box.
-    2) Use the tab key to change between buttons on the bottom
-    3) When selecting a file or a folder, a selection screen will appear. You can use tab to move to each pane and
-    \t- You should use the spacebar to select files/folders.
-    \tIt is important that you DO NOT HIT OK until you have used the space bar to select the desired file or folder and see its name in the box
-    4) A help button will appear when help is available. Use tab to select and enter to press it
-    5) Pressing cancel at any time will terminate the program completely and you will have to start over.
-
-    Would you like to continue using this program?
-    ''')
     global verbose, options
     options = parse_args()
+    if options.user_cancelled:
+        return
     if options.directory:
         os.chdir(options.directory)
         yesorno(title="{} ready".format(options.directory),
@@ -492,7 +520,7 @@ def main():
                     try:
                         print('Doing {}'.format(filename))
                         msg = main_for_file(filename, drawOnly=options.box, show=options.show,
-                                            limit=options.max)
+                                            limit=options.max, multiplier=options.multiplier)
 
                         if msg is not None:
                             pass
@@ -530,7 +558,7 @@ def main():
 
         def closure():
             main_for_file(options.file, drawOnly=options.box, show=options.show,
-                          limit=options.max)
+                          limit=options.max,multiplier=options.multiplier)
             g.done()
 
         thread = threading.Thread(daemon=True, target=closure)
