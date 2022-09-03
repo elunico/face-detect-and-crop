@@ -18,8 +18,29 @@ import cv2
 verbose = False
 
 # load the pre-trained model
-classifier = cv2.CascadeClassifier(os.path.join(sys._MEIPASS, 'haarcascade_frontalface_default.xml'))
 
+search_locations = [
+    os.path.join(getattr(sys, '_MEIPASS', './'), 'haarcascade_frontalface_default.xml'),
+    os.path.join('model', 'haarcascade_frontalface_default.xml'),
+    'haarcascade_frontalface_default.xml'
+]
+
+location = None
+for i in search_locations:
+    try:
+        with open(i) as f:
+            location = i
+            break
+    except (OSError, AttributeError):
+        pass
+
+
+if location is None:
+    messagebox.showerror("Cannot find model file", "The program cannot find the required model file haarcascade_frontalface_default.xml. It cannot function without this file. If you moved the application, be sure to move that file as well")
+    raise SystemExit(1)
+
+
+classifier = cv2.CascadeClassifier(location)
 
 class GetParameters:
 
