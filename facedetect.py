@@ -18,7 +18,7 @@ import cv2
 verbose = False
 
 # load the pre-trained model
-classifier = cv2.CascadeClassifier('model/haarcascade_frontalface_default.xml')
+classifier = cv2.CascadeClassifier(os.path.join(sys._MEIPASS, 'haarcascade_frontalface_default.xml'))
 
 
 class GetParameters:
@@ -208,7 +208,10 @@ class GetParameters:
 
         for window in self.windows:
             print(window)
-            window.destroy()
+            try:
+                window.destroy()
+            except Exception:
+                pass
 
 
 def parse_args():
@@ -505,7 +508,6 @@ def main():
     Would you like to continue using this program?
     ''')
     global verbose, options
-    print("Giot this far")
     options = parse_args()
     if options.directory:
         os.chdir(options.directory)
