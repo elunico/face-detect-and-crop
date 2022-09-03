@@ -8,13 +8,15 @@ import os.path
 import sys
 import threading
 import time
+import uuid
 from tkinter import *
 from tkinter import filedialog, StringVar
 from tkinter import messagebox
 from typing import List, Tuple, Callable, Optional
-from guitils import GUIProgress
 
 import cv2
+
+from guitils import GUIProgress, yesorno, infobox, SimpleContainer
 
 verbose = False
 
@@ -35,13 +37,13 @@ for i in search_locations:
     except (OSError, AttributeError):
         pass
 
-
 if location is None:
-    messagebox.showerror("Cannot find model file", "The program cannot find the required model file haarcascade_frontalface_default.xml. It cannot function without this file. If you moved the application, be sure to move that file as well")
+    messagebox.showerror("Cannot find model file",
+                         "The program cannot find the required model file haarcascade_frontalface_default.xml. It cannot function without this file. If you moved the application, be sure to move that file as well")
     raise SystemExit(1)
 
-
 classifier = cv2.CascadeClassifier(location)
+
 
 class GetParameters:
 
@@ -66,14 +68,21 @@ class GetParameters:
         t.title('Face Extractor Program')
         intro = Label(t,
                       text="Welcome to the face extractor program\nThis program will allow you to extract faces from images.\nSelect below to start")
-        db = Button(t, text="Run on a whole directory", command=self.run_directory)
-        fb = Button(t, text="Run on a single file", command=self.run_file)
-        intro.pack()
-        fb.pack()
-        db.pack()
+        locationvar = StringVar(t, '<nothing selected>')
+        locationvar.was_set = False
+        location = Label(t, textvariable=locationvar)
+        db = Button(t, text="I have a folder full of images to process",
+                    command=lambda: self.choose_target_directory(t, locationvar))
+        fb = Button(t, text="I have 1 image to process", command=lambda: self.choose_target_file(t, locationvar))
+        nb = Button(t, text="Next", command=lambda: self.choose_parameters(locationvar))
+        intro.pack(padx=2, pady=2)
+        location.pack(padx=2, pady=2)
+        fb.pack(padx=2, pady=2)
+        db.pack(padx=2, pady=2)
+        nb.pack(padx=2, pady=2)
         t.mainloop()
 
-    def choose_dir(self, root, container: StringVar) -> Optional[StringVar]:
+    def choose_target_directory(self, root, container: StringVar) -> Optional[StringVar]:
         dir = filedialog.askdirectory(initialdir=os.path.realpath('.'), title="Choose images directory")
         if dir == '':
             return
@@ -83,54 +92,22 @@ class GetParameters:
         root.update()
         return container
 
-    def get_resize_strategy(self):
-        def help():
-            helpwin = self.spawn_window()
-            helpwin.title('Help for Operation Parameters')
-            label = Label(helpwin, text='''
-            pad 
-                This option takes the image and fits a plain white border around it. 
-                It will pad the left and right or top and bottom with white pixels until the aspect ratio of 190/x237 is reached. 
-                The image will then be shrunk to 190x237 so that no stretching or squashing will occur
-            
-            plain
-                This option does not alter the cropped image and simply resizes it to 190x237 
-                allowing it to be squashed or stretched as needed to fit those dimensions
-            ''')
-            label.pack()
-            helpwin.mainloop()
-
-        window = self.spawn_window()
-        window.title("Choose resize strategy")
-
-        label = Label(window, text='Choose the resize strategy')
-
-        choices = ['pad', 'plain']
-        variable = StringVar(window)
-        variable.set('pad')
-
-        w = OptionMenu(window, variable, *choices)
-        help = Button(window, text="Show Help", command=help)
-        go = Button(window, text="Go", command=lambda: self.finalize(variable))
-        label.pack()
-        w.pack()
-        go.pack()
-        help.pack()
-        window.mainloop()
-
-    def run_dir_action(self, actionvar, facevar):
+    def set_parameters(self, actionvar, facevar):
         try:
             facevar.get()
         except Exception:
             return
         setattr(self.namespace, 'max', facevar.get())
-        setattr(self.namespace, actionvar.get(), True)
-        if actionvar.get() == 'resize':
-            self.get_resize_strategy()
+        action, *resize = actionvar.get().split(' ')
+        if resize:
+            setattr(self.namespace, 'resize', True)
+            setattr(self.namespace, action, True)
         else:
-            self.finalize(None)
+            setattr(self.namespace, action, True)
 
-    def select_parameters(self, container):
+        self.finalize()
+
+    def choose_parameters(self, container):
         def help():
             helpwin = self.spawn_window()
             helpwin.title('Help for Operation Parameters')
@@ -145,11 +122,18 @@ class GetParameters:
        where the image is cropped to the bounding box of the detected face. 
        No other alterations to the image take place
     
-    resize
+    plain resize
        This option is the same as "crop" but it will also take the image that results from the "crop" option and 
-       resize to tbe 190x237 pixles, the exact size of a photo that Rediker uses
+       resize to tbe 190x237 pixles, the exact size of a photo that Rediker uses. Because this option blindly sizes the
+       image to 190x237, this can cause distortions and stretching or squishing of the image. 
+       
+    pad resize
+       This option is the same as "crop" but it will also take the image that results from the "crop" option and perform 
+       two more tasks. First, it takes the image and adds white borders around the outside as needed until its aspect
+       ratio is proportional to 190x237. It then shrinks the resulting image to 190x237 exactly. This prevents the 
+       squishing and stretching in the plain-resize option but does waste some space with the borders
     ''')
-            label.pack()
+            label.pack(padx=2, pady=2)
             helpwin.mainloop()
 
         if not container.was_set:
@@ -161,9 +145,9 @@ class GetParameters:
 
         label = Label(window, text='Choose the operation to perform on each image')
 
-        choices = ['box', 'crop', 'resize']
+        choices = ['box', 'crop', 'plain resize', 'padded resize']
         actionvar = StringVar(window)
-        actionvar.set('resize')
+        actionvar.set('padded resize')
 
         w = OptionMenu(window, actionvar, *choices)
 
@@ -173,33 +157,17 @@ class GetParameters:
         faceentry = Entry(window, textvariable=facevar)
 
         help = Button(window, text="Show Help", command=help)
-        go = Button(window, text="Go", command=lambda: self.run_dir_action(actionvar, facevar))
-        label.pack()
-        w.pack()
-        label2.pack()
-        faceentry.pack()
-        go.pack()
-        help.pack()
+        go = Button(window, text="Go", command=lambda: self.set_parameters(actionvar, facevar))
+        label.pack(padx=2, pady=2)
+        w.pack(padx=2, pady=2)
+        label2.pack(padx=2, pady=2)
+        faceentry.pack(padx=2, pady=2)
+        go.pack(padx=2, pady=2)
+        help.pack(padx=2, pady=2)
         window.mainloop()
 
-    def run_directory(self):
-        root = self.spawn_window()
-        root.title('Choose directory for source images')
-
-        l = Label(root, text="Select the directory containing the images to process")
-        container = StringVar(root)
-        container.was_set = False
-        dlabel = Label(root, textvariable=container)
-        select = Button(root, text="Select Dir", command=lambda: self.choose_dir(root, container))
-        button = Button(root, text='Next', command=lambda: self.select_parameters(container))
-        l.pack()
-        dlabel.pack()
-        select.pack()
-        button.pack()
-        root.mainloop()
-
-    def choose_file(self, parent, container):
-        file = filedialog.askopenfilename(initialdir=os.path.realpath('.'), title="Choose images directory")
+    def choose_target_file(self, parent, container):
+        file = filedialog.askopenfilename(initialdir=os.path.realpath('.'), title="Choose image file")
         if file == '':
             return
         container.set(file)
@@ -208,26 +176,7 @@ class GetParameters:
         parent.update()
         return container
 
-    def run_file(self):
-        root = self.spawn_window()
-        root.title('Choose file for processing')
-
-        l = Label(root, text="Select the file that you want to process")
-        container = StringVar(root)
-        container.was_set = False
-        dlabel = Label(root, textvariable=container)
-        select = Button(root, text="Select File", command=lambda: self.choose_file(root, container))
-        button = Button(root, text='Next', command=lambda: self.select_parameters(container))
-        l.pack()
-        dlabel.pack()
-        select.pack()
-        button.pack()
-        root.mainloop()
-
-    def finalize(self, resize_strategy):
-        if resize_strategy is not None:
-            setattr(self.namespace, resize_strategy.get(), True)
-
+    def finalize(self):
         for window in self.windows:
             print(window)
             try:
@@ -283,8 +232,10 @@ def printing(arg):
     print(arg)
     return arg
 
+
 class NotAnImageError(OSError):
     pass
+
 
 def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> List[Tuple[int, int, int, int]]:
     '''
@@ -467,7 +418,6 @@ def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int =
     vsay(f"[-] Computing bounding boxes for {path}...")
     boxes = bounding_boxes_for_id(path, classifier)
 
-    # vsay(f"[-] Found {len(boxes)} faces in file {path}.")
     msg = None
     if 0 < limit < len(boxes):
         msg = "[*] Warning: file {} -> limit was {} but found {} faces. Taking first {}".format(path, limit, len(boxes),
@@ -476,10 +426,8 @@ def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int =
     if len(boxes) == 0:
         return '[!] Error: No faces found in {}'.format(path)
     if drawOnly:
-        # vsay(f'[-] Drawing bounding boxes for {path}...')
         draw_bounding_box(path, boxes, show, write)
     else:
-        # vsay(f'[-] Cropping to bounding boxes for {path}...')
         crop_to_boxes(path, boxes, show, write)
 
     return msg
@@ -490,39 +438,6 @@ def vsay(msg, end="\n"):
         print(msg, end=end)
 
 
-def percentFor(i, total):
-    return int((i / total) * 100)
-
-
-def yesorno(title, text):
-    window = Tk()
-    window.title(title)
-    # window.attributes('-disabled', True)
-    label = Label(window, text=text)
-    result = {'status': 'cancel'}
-    ok = Button(window, text="OK", command=lambda: result.__setitem__('status', 'ok') or window.destroy())
-    cancel = Button(window, text="Cancel", command=lambda: result.__setitem__('status', 'cancel') or window.destroy())
-    label.pack()
-    ok.pack()
-    cancel.pack()
-    window.mainloop()
-    if result['status'] == 'cancel':
-        raise SystemExit()
-
-
-def infobox(title='', text=''):
-    messagebox.showinfo(title, text)
-
-class SimpleContainer:
-    def __init__(self, value):
-        self.value = value
-
-    def set(self, value):
-        self.value =value
-
-    def get(self):
-        return self.value
-
 def main():
     yesorno(title='License Agreement', text='''
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
@@ -531,8 +446,10 @@ def main():
     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE 
     OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     
+    If you accept the terms, you will not be asked again.
+    
     Do you accept the terms?
-    ''')
+    ''', once_identifier='9e0ecb73-7e83-4c9e-b294-59b7a2b2db5c')
     yesorno(title="Welcome to facedetect", text='''
     This program will help you extract faces from an image or a folder of many images.
     You can have the program draw boxes around faces, show but not write out the final images, crop, and even resize
@@ -563,6 +480,7 @@ def main():
         total = len(iterator)
 
         job_gate_variable = SimpleContainer(True)
+
         def closure():
             for (i, filename) in enumerate(iterator):
                 if not job_gate_variable.get():
@@ -600,7 +518,7 @@ def main():
                         job_gate_variable=job_gate_variable, thread=thread)
         thread.start()
         g.start()
-        if job_gate_variable.get(): # if cancelled don't show the finished message
+        if job_gate_variable.get():  # if cancelled don't show the finished message
             infobox(title="Finished!", text="The program has completed processing {}".format(options.directory))
     elif options.file:
         yesorno(title="{} ready".format(options.file),
@@ -608,7 +526,8 @@ def main():
                     options.file))
 
         label_text = 'Processing file {}'.format(options.file)
-        g = GUIProgress(label_text, 1, label_text, label_text)
+        g = GUIProgress(label_text, 1, label_text, label_text, None, None)
+
         def closure():
             main_for_file(options.file, drawOnly=options.box, show=options.show,
                           limit=options.max)
@@ -625,5 +544,6 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as e:
+        messagebox.showerror('An error occurred', 'An error occurred: {}'.format(str(e)))
         print(e)
-        input("There was an error. Press any key to exit")
+        # input("There was an error. Press any key to exit")
