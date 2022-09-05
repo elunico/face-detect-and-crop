@@ -6,6 +6,7 @@
 import argparse
 import os.path
 import sys
+import time
 from typing import List, Tuple, Callable
 
 import cv2
@@ -175,15 +176,11 @@ def _on_each_box(
         show: bool = False,
         write: bool = True
 ) -> 'List[cv2.image]':
-    vsay(f'[-] Reading image from {os.path.join(indir, name + ext)}...')
     image = cv2.imread(os.path.join(indir, name + ext))
     if image is None:
-        vsay(f'[*] Got empty image from path {os.path.join(indir, name + ext)}')
-    else:
-        vsay(f'[-] Got image with dimensions: {image.shape}...')
+        return []
     results = []
     for i in range(len(boxes)):
-        vsay(f'[-] Processing box {i} of {len(boxes)}...')
         (x1, y1, x2, y2) = boxes[i]
         result = transform(image, x1, y1, x2, y2)
         results.append(result)
@@ -193,10 +190,11 @@ def _on_each_box(
         outfile = '{}/{}_face{}{}'.format(outdir, name, i, ext)
         if write:
             try:
-                vsay(f'[-] Writing result to {outfile}...')
                 cv2.imwrite(outfile, result)
             except cv2.error as e:
-                print("[!] Could not write image called {}".format(outfile), file=sys.stderr)
+                show_dialog(d.infobox, text="[!] Could not write image called {}".format(outfile))
+                time.sleep(0.5)
+                # print("[!] Could not write image called {}".format(outfile), file=sys.stderr)
                 print(e.msg, file=sys.stderr)
     return results
 
@@ -259,7 +257,6 @@ def crop_to_boxes(path: str, boxes: List[Tuple[int, int, int, int]], show: bool 
     directory, filename = path_to_components(path)
     name, ext = get_name_and_extension(filename)
     if write:
-        vsay(f'[-] Ensuring the existance of {os.path.join(directory, "cropped")} or createing it.')
         ensure_dir(os.path.join(directory, 'cropped'))
 
     _on_each_box(directory, name, ext, boxes, os.path.join(directory, 'cropped'), cropnshrink, show, write)
@@ -281,7 +278,6 @@ def draw_bounding_box(path: str, boxes: List[Tuple[int, int, int, int]], show: b
     directory, filename = path_to_components(path)
     name, ext = get_name_and_extension(filename)
     if write:
-        vsay(f'[-] Ensuring the existance of {os.path.join(directory, "marked")} or createing it.')
         ensure_dir(os.path.join(directory, 'marked'))
 
     def draw_rect(img, x1, y1, x2, y2, color=(0, 0, 255)):
@@ -305,10 +301,7 @@ def test():
 
 
 def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int = 5, write: bool = True):
-    vsay(f"[-] Computing bounding boxes for {path}...")
     boxes = bounding_boxes_for_id(path, classifier)
-
-    # vsay(f"[-] Found {len(boxes)} faces in file {path}.")
     msg = None
     if 0 < limit < len(boxes):
         msg = "[*] Warning: file {} -> limit was {} but found {} faces. Taking first {}".format(path, limit, len(boxes),
@@ -317,18 +310,11 @@ def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int =
     if len(boxes) == 0:
         return '[!] Error: No faces found in {}'.format(path)
     if drawOnly:
-        # vsay(f'[-] Drawing bounding boxes for {path}...')
         draw_bounding_box(path, boxes, show, write)
     else:
-        # vsay(f'[-] Cropping to bounding boxes for {path}...')
         crop_to_boxes(path, boxes, show, write)
 
     return msg
-
-
-def vsay(msg, end="\n"):
-    if verbose:
-        print(msg, end=end)
 
 
 def percentFor(i, total):
@@ -362,15 +348,10 @@ def main():
         show_dialog(d.yesno, title="{} ready".format(options.directory), text="Program is ready to detect faces in {}\nResults will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(options.directory))
 
         show_dialog(d.infobox, text=f'Reading files in {options.directory}...')
-        if options.verbose or options.quiet:
-            iterator = os.listdir('.')
-        else:
-            # print(f'Working on files in: "{options.directory}"...')
-            iterator = (os.listdir('.'))
+        iterator = os.listdir('.')
         total = len(iterator)
         d.gauge_start('Working on files in {}'.format(options.directory))
         for (i, filename) in enumerate(iterator):
-            # vsay(f'[-] Reading file {filename}')
             d.gauge_update(percentFor(i, total), text='Reading file {}'.format(filename), update_text=True)
             if not os.path.isdir(filename):
                 try:
@@ -389,7 +370,6 @@ def main():
         d.gauge_update(100, f'Done with "{options.directory}"', update_text=True)
         d.gauge_stop()
     elif options.file:
-        # vsay(f"[-] Processing file: {options.file}...")
         show_dialog(d.yesno, title="{} ready".format(options.directory), text="Program is ready to detect faces in {}. Results will be placed in a sub folder. Any images from a previous run of this program WILL BE OVERWRITTEN\nContinue?".format(options.file))
         show_dialog(d.infobox, text=f"Processing file: {options.file}...")
         main_for_file(options.file, drawOnly=options.box, show=options.show or options.nowrite,
