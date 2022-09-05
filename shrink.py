@@ -1,47 +1,107 @@
 import argparse
-import cv2
-import os.path
-import dialog
 import os
-from utils import *
+import os.path
+import threading
+from tkinter import *
+from tkinter import filedialog, ttk, messagebox
 
-d = dialog.Dialog()
+import cv2
+
+from guitils import yesorno, GUIProgress, SimpleContainer
 
 
 def percentOf(value, total):
     return int((value / total) * 100)
 
 
+def ptail(path):
+    return os.path.split(path)[-1]
+
+def phead(path):
+    return os.path.split(path)[0]
+
 def get_interactive_args():
     options = argparse.Namespace(**{'file': None, 'directory': None, 'output': None, 'width': None})
 
-    choice = show_dialog(d.menu, text='Do you want to run the program on all the items of a folder or a single file?',
-                         choices=[('dir', 'Entire Folder'), ('file', 'A Single File')])
+    def choose_location(var, method):
+        actions = {'file': filedialog.askopenfilename, 'directory': filedialog.askdirectory}
+        choice = actions[method](initialdir=os.getcwd())
+        if choice:
+            var.was_set = True
+            var.method = method
+            var.set(choice)
+            setattr(options, method, choice)
 
-    if choice == 'dir':
-        directory = show_dialog(d.dselect, filepath=os.getcwd(),
-                                title='Choose the folder containing the images to process')
-        setattr(options, 'directory', directory)
-    else:
-        file = show_dialog(d.fselect, filepath=os.getcwd(), title="Choose the image file to process")
-        setattr(options, 'file', file)
+    def save_file(sourcevar, destinationvar):
+        if not hasattr(sourcevar, 'method'):
+            messagebox.showerror("No source selected", "Choose a source file or folder first!")
+            return
+        if sourcevar.method == 'directory':
+            choice = filedialog.askdirectory(initialdir=sourcevar.get())
+        else:
+            choice = filedialog.asksaveasfilename(initialdir=phead(sourcevar.get()), initialfile=ptail(sourcevar.get()))
+        if choice:
+            destinationvar.was_set = True
+            destinationvar.set(choice)
+            setattr(options, 'output', choice)
 
-    width = dialog_get_int('Enter the desired width of the new images')
+    def go_shrink(loc, out, wv):
+        try:
+            if wv.get() <= 0:
+                raise ValueError("Invalid width")
+        except Exception:
+            messagebox.showerror('Invalid Width', 'You must enter a valid positive integer for width')
 
-    setattr(options, 'width', str(width))
+        if not loc.was_set:
+            messagebox.showinfo('Choose Source', "You must choose a source file or directory to shrink")
+            return
 
-    if choice == 'dir':
-        directory = show_dialog(d.dselect, filepath=os.getcwd(), title="Choose the folder to place the processed image")
-        setattr(options, 'output', directory)
+        if not out.was_set:
+            messagebox.showinfo('Choose Destination', 'You must choose a save location for the shrunken file')
+            return
 
-    print(options)
+        setattr(options, 'width', wv.get())
+        argwindow.destroy()
+
+    argwindow = Tk()
+    linstruction = Label(argwindow, text="Choose a file or folder of images to shrink")
+    locationvar = StringVar()
+    locationvar.was_set = False
+
+    flabel = Label(argwindow, textvariable=locationvar)
+
+    fchoose = Button(argwindow, text="Choose file", command=lambda: choose_location(locationvar, 'file'))
+    dchoose = Button(argwindow, text="Choose folder", command=lambda: choose_location(locationvar, 'directory'))
+    linstruction.pack()
+    flabel.pack()
+    fchoose.pack()
+    dchoose.pack()
+    ttk.Separator(argwindow, orient='horizontal').pack(fill='x', padx=5, pady=5)
+    oinstruction = Label(argwindow, text="Choose a destination file for the shrunken file")
+    outvar = StringVar()
+    outvar.was_set = False
+
+    olabel = Label(argwindow, textvariable=outvar)
+    ochoose = Button(argwindow, text="Choose destination", command=lambda: save_file(locationvar, outvar))
+    oinstruction.pack()
+    olabel.pack()
+    ochoose.pack()
+
+    widthvar = IntVar(argwindow, 197)
+    slabel = Label(argwindow, text='Enter the width to resize to\n(Height is calculated automatically)')
+    sentry = Entry(textvariable=widthvar)
+    sbutton = Button(argwindow, text="Shrink!", command=lambda: go_shrink(locationvar, outvar, widthvar))
+    slabel.pack()
+    sentry.pack()
+    sbutton.pack()
+    argwindow.mainloop()
 
     return options
 
 
 def rename_shrunk(input, width):
     new_name = input.split('.')
-    new_name[0] = new_name[0] + '_shrunk_' + width
+    new_name[0] = new_name[0] + '_shrunk_' + str(width)
     return '.'.join(new_name)
 
 
@@ -58,7 +118,7 @@ def resize_image(filename, argwidth, destination):
 
 
 def main():
-    show_dialog(d.yesno, title="Welcome to shrink", text='''
+    yesorno(title="Welcome to shrink", text='''
         This program will help you shrink an image file to the correct size for Rediker's photo system. It is worth 
         noting that the facedetect program can do this automatically when detecting faces, however, you can also do it 
         manually here
@@ -79,48 +139,51 @@ def main():
     args = get_interactive_args()
 
     if args.file:
-        answer = d.yesno('Warning! Do you want to overwrite the original file?')
-        if answer != d.OK:
-            directory, cfile = os.path.split(os.path.realpath(args.file))
-            output = show_dialog(d.dselect,
-                                 title="Choose the new output directory for the resulting image. You can specify a different name next",
-                                 filepath=directory,
-                                 help_text='If you do not want the "shrink.py" program to overwrite the existing image file, then you can specify a new path to store the image at. First you should choose the directory to save in on this screen. By default it will put you in the directory where the image is found. Once you select the destination directory, you can then specify a new filename.')
-            dest_name = show_dialog(d.inputbox, text="Enter new name (old name: {})".format(cfile))
-            destination = os.path.join(output, dest_name)
-        else:
-            dest_name = os.path.split(args.file)[1]
-            destination = args.file
-        show_dialog(d.yesno, title="{} ready to be shrunk".format(args.file), text="Program is ready to shrink {} into {} with width {}.\nContinue?".format(args.file, destination, args.width))
-        d.gauge_start(text='Processing {}'.format(args.file))
+        destination = args.output
         resize_image(args.file, args.width, destination)
-        d.gauge_update(100, 'Done with {}!'.format(dest_name), update_text=True)
-        d.gauge_stop()
+        messagebox.showinfo("Done", "Finished shrinking \n{}\ninto\n{}".format(args.file, args.output))
     elif args.directory:
-        outdir = os.path.join(os.path.curdir, args.output)
-        if not os.path.exists(outdir) and not os.path.isdir(outdir):
-            show_dialog(d.msgbox, text='Output directory does not exist, it will be created')
-            os.makedirs(outdir)
-        elif os.path.exists(outdir) and not os.path.isdir(outdir):
-            raise TypeError('Output is not a directory')
-
-        show_dialog(d.yesno, title="Ready to begin shrinking", text="Program will begin shrinking images in directory {}\nShrunken image files will have {} appended to their name and be placed in {}.\nIf files matching this pattern exist, they WILL BE OVERWRITTEN\nContinue?".format(args.directory, args.width,outdir))
+        outdir = args.output
+        yesorno(title="Ready to begin shrinking",
+                text="""
+                Shrinking files in {}
+                Shrunken image files will have their original name + '_shrunk_{}' at the end
+                Shrunked images will be written in {}
+                
+                If files matching this pattern exist, they WILL BE OVERWRITTEN
+                
+                Continue?""".format(
+                    args.directory, args.width, outdir))
         filenames = os.listdir(args.directory)
         total = len(filenames)
-        d.gauge_start('Processing {} files'.format(total))
-        for (i, path) in enumerate(filenames):
-            filename = os.path.join(args.directory, path)
-            d.gauge_update(percentOf(i, total), text='Processing: ' + filename, update_text=True)
-            new_name = rename_shrunk(path, args.width)
-            new_file = os.path.join(outdir, new_name)
-            result = resize_image(filename, args.width, new_file)
-            if not result:
-                d.gauge_update(percentOf(i, total), text='Error: Could not read image named: {}'.format(filename),
-                               update_text=True)
-        d.gauge_update(100, text="Done", update_text=True)
-        d.gauge_stop()
+        shrinkgate = SimpleContainer(True)
+        g = GUIProgress('Shrinking files...',
+                        total,
+                        title='Shrinking files in {}'.format(args.directory),
+                        main_label='Shrinking files in {}'.format(args.directory),
+                        job_gate_variable=shrinkgate)
+
+        def target():
+            for (i, path) in enumerate(filenames):
+                if not shrinkgate.get():
+                    g.update(0, 'User cancelled')
+                    g.done()
+                    break
+                filename = os.path.join(args.directory, path)
+                g.update(i, 'Shrinking {}'.format(path))
+                new_name = rename_shrunk(path, args.width)
+                new_file = os.path.join(outdir, new_name)
+                result = resize_image(filename, args.width, new_file)
+                if not result:
+                    g.update(i, text='Error: Could not read image named: {}'.format(filename))
+            g.update(total, text="Done")
+            g.done()
+        thread = threading.Thread(daemon=True, target=target)
+        thread.start()
+        g.start()
+
     else:
-        raise ValueError("Specify dir or file")
+        messagebox.showerror("No Selection", "No File or Folder was selected")
 
 
 if __name__ == '__main__':
