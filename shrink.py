@@ -7,7 +7,7 @@ from tkinter import filedialog, ttk, messagebox
 
 import cv2
 
-from guitils import yesorno, GUIProgress, SimpleContainer
+from guitils import yesorno, GUIProgress, SimpleContainer, license_agreement
 
 
 def percentOf(value, total):
@@ -118,24 +118,7 @@ def resize_image(filename, argwidth, destination):
 
 
 def main():
-    yesorno(title="Welcome to shrink", text='''
-        This program will help you shrink an image file to the correct size for Rediker's photo system. It is worth 
-        noting that the facedetect program can do this automatically when detecting faces, however, you can also do it 
-        manually here
-
-        You will be guided through the process in a series of steps using interactive dialogs 
-
-        ** INSTRUCTIONS FOR USE**
-        1) You may type to enter text in any text box. 
-        2) Use the tab key to change between buttons on the bottom
-        3) When selecting a file or a folder, a selection screen will appear. You can use tab to move to each pane and 
-        \t- You should use the spacebar to select files/folders. 
-        \tIt is important that you DO NOT HIT OK until you have used the space bar to select the desired file or folder and see its name in the box 
-        4) A help button will appear when help is available. Use tab to select and enter to press it 
-        5) Pressing cancel at any time will terminate the program completely and you will have to start over. 
-
-        Would you like to continue using this program?
-        ''')
+    license_agreement(id='1396e5a3-1b9b-4667-bc44-00031be77a90')
     args = get_interactive_args()
 
     if args.file:

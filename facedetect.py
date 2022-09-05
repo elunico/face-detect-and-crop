@@ -16,7 +16,7 @@ from typing import List, Tuple, Callable, Optional
 
 import cv2
 
-from guitils import GUIProgress, yesorno, infobox, SimpleContainer
+from guitils import GUIProgress, yesorno, infobox, SimpleContainer, license_agreement
 
 verbose = False
 
@@ -521,17 +521,7 @@ def vsay(msg, end="\n"):
 
 
 def main():
-    yesorno(title='License Agreement', text='''
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
-    WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
-    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, 
-    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE 
-    OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-    
-    If you accept the terms, you will not be asked again.
-    
-    Do you accept the terms?
-    ''', once_identifier='9e0ecb73-7e83-4c9e-b294-59b7a2b2db5c')
+    license_agreement('9e0ecb73-7e83-4c9e-b294-59b7a2b2db5c')
     global verbose, options
     options = parse_args()
     if options.user_cancelled:

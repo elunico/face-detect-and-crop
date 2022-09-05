@@ -6,3 +6,4 @@
 
 pyinstaller --add-data "model/haarcascade_frontalface_default.xml;." --paths ./venv/Lib/site-packages --windowed -F facedetect.py
 
+pyinstaller --paths ./venv/Lib/site-packages --windowed -F shrink.py
