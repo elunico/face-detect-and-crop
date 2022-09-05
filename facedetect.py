@@ -592,7 +592,7 @@ def main():
                     options.file))
 
         label_text = 'Processing file {}'.format(options.file)
-        g = GUIProgress(label_text, 1, label_text, label_text, None, None)
+        g = GUIProgress(label_text, 1, label_text, label_text, None)
 
         def closure():
             main_for_file(options.file, drawOnly=options.box, show=options.show,

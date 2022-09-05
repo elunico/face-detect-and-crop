@@ -3,14 +3,13 @@ from tkinter import messagebox, Tk, Label, Button
 import os.path
 
 class GUIProgress:
-    def __init__(self, text, total, title, main_label, job_gate_variable, thread):
+    def __init__(self, text, total, title, main_label, job_gate_variable):
         self.window = Tk()
         self.window.protocol("WM_DELETE_WINDOW", lambda: ...)
         self.window.title(title)
         self.window.eval('tk::PlaceWindow . center')
 
         self.keepgoing = job_gate_variable
-        self.thread = thread
         self.current = 0
         self.total = total
         self._done = False
@@ -70,7 +69,7 @@ def bind(fn, *args, **kwargs):
     return lambda: fn(*args, **kwargs)
 
 
-def yesorno(title, text, once_identifier=None):
+def yesorno(title, text, once_identifier=None, denyButton='Cancel', acceptButton='OK', exitOnNo=True):
     folder = os.path.expandvars(r'%APPDATA%\facedetect\yesnosingle')
     if not os.path.isdir(folder):
         try:
@@ -85,8 +84,8 @@ def yesorno(title, text, once_identifier=None):
     window.title(title)
     label = Label(window, text=text)
     result = YesNoStatus()
-    ok = Button(window, text="OK", command=lambda: result.ok() or window.destroy())
-    cancel = Button(window, text="Cancel", command=lambda: result.cancel() or window.destroy())
+    ok = Button(window, text=acceptButton, command=lambda: result.ok() or window.destroy())
+    cancel = Button(window, text=denyButton, command=lambda: result.cancel() or window.destroy())
     label.pack(padx=2, pady=2)
     ok.pack(padx=2, pady=2)
     cancel.pack(padx=2, pady=2)
@@ -96,8 +95,10 @@ def yesorno(title, text, once_identifier=None):
         with open(destination_file, 'w') as f:
             f.write('sentinel')
 
-    if result.is_cancel():
+    if result.is_cancel() and exitOnNo:
         raise SystemExit()
+    elif result.is_cancel() and not exitOnNo:
+        return False
 
 
 def infobox(title='', text=''):
