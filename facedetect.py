@@ -571,7 +571,7 @@ def main():
         g = GUIProgress('Working on {}'.format(options.directory), total=total,
                         title="Face Extractor Program Running...",
                         main_label='Running face extractor on {}'.format(options.directory),
-                        job_gate_variable=job_gate_variable, thread=thread)
+                        job_gate_variable=job_gate_variable)
         thread.start()
         g.start()
         if job_gate_variable.get():  # if cancelled don't show the finished message
