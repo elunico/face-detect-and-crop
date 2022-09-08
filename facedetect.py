@@ -36,6 +36,7 @@ class Label(TK_OLD_LABEL):
         text = text.replace('\n', '')
         super().__init__(*args, text=text, wraplength=325, **kwargs)
 
+
 class HelpLabel(TK_OLD_LABEL):
     pass
 
@@ -86,7 +87,10 @@ class GetParameters:
             'plain': None,
             'pad': None,
             'multiplier': None,
-            'user_cancelled': True
+            'user_cancelled': True,
+            'min_box_width': 0,
+            'min_box_height': 0,
+
         })
         self.choose_parameters()
 
@@ -100,7 +104,21 @@ class GetParameters:
         root.update()
         return container
 
-    def set_parameters(self, actionvar, facevar, multvar, locationvar):
+    def set_parameters(self, actionvar, facevar, multvar, locationvar, minsizevar):
+        minsize = minsizevar.get()
+        try:
+            minwidth, minheight = minsize.split('x')
+            minwidth = int(minwidth)
+            minheight = int(minheight)
+        except Exception as e:
+            messagebox.showerror('Invalid Min Box Size',
+                                 "{} is not a valid min size. Click the help button for more\n{}".format(minsize,
+                                                                                                         str(e)))
+            return
+
+        setattr(self.namespace, 'min_box_width', minwidth)
+        setattr(self.namespace, 'min_box_height', minheight)
+
         if not locationvar.was_set:
             messagebox.showerror('No Selection', 'You must select a file/directory before continuing')
             return
@@ -110,7 +128,6 @@ class GetParameters:
             return
         setattr(self.namespace, 'max', facevar.get())
         action, *resize = actionvar.get().split(' ')
-        print(action, resize)
         if resize:
             setattr(self.namespace, 'resize', True)
             setattr(self.namespace, action, True)
@@ -138,6 +155,12 @@ class GetParameters:
        the longer the program takes. If the program detects less than max faces it will simply output 1 file for each 
        detected face
     
+    Minimum Box Size
+       The minimum box size parameter is a string in the format INTEGERxINTEGER such as 200x300 or 400x100. This 
+       parameter specifies the minimum size a bounding box of a face must be for the program to extract it. 
+       This helps cut down on false positives by ensuring small anomolies do not get detected by the program.
+       You can use '0x0' to ensure all possible faces are extracted
+       
     Program Actions
         box
            This option will find faces in the image and write out one image per face. 
@@ -164,13 +187,13 @@ class GetParameters:
        If using the one of the "resize" option, this option determines what multiple of the Rediker resolution (190x237) is used
        This can be helpful for lower qualilty or very disproportionate images. 
     ''')
-            Label(helpwin,text='Face Detector Program Explanations', font=("Arial", 15)).pack(padx=5,pady=5)
+            Label(helpwin, text='Face Detector Program Explanations', font=("Arial", 15)).pack(padx=5, pady=5)
             label.pack(padx=2, pady=2, anchor=NW)
             helpwin.mainloop()
 
         self.actionvar = None
         self.m = None
-        t = self.spawn_window('350x470')
+        t = self.spawn_window('350x575')
         t.title('Face Extractor Program')
         intro = Label(t,
                       text="This program will allow you to take an image"
@@ -198,6 +221,12 @@ class GetParameters:
         facevar.set(5)
         faceentry = Entry(t, textvariable=facevar)
 
+        label4 = Label(t,
+                       text="Specify the minimum WIDTHxHEIGHT measurements in pixels of boxes to extract from images")
+        minsizevar = StringVar(t)
+        minsizevar.set('200x400')
+        minsizeentry = Entry(t, textvariable=minsizevar)
+
         choices2 = ['1x', '2x', '3x', '4x']
         multvar = StringVar(t)
         multvar.set('1x')
@@ -206,7 +235,8 @@ class GetParameters:
         self.m = OptionMenu(t, multvar, *choices2)
 
         help = Button(t, text="Show Help", command=help)
-        go = Button(t, text="Go", command=lambda: self.set_parameters(self.actionvar, facevar, multvar, locationvar))
+        go = Button(t, text="Go",
+                    command=lambda: self.set_parameters(self.actionvar, facevar, multvar, locationvar, minsizevar))
 
         intro.pack(padx=2, pady=2)
         Separator(t, orient='horizontal').pack(fill='x', padx=2, pady=2)
@@ -219,6 +249,9 @@ class GetParameters:
 
         label2.pack(padx=2, pady=2)
         faceentry.pack(padx=2, pady=2)
+
+        label4.pack(padx=2, pady=2)
+        minsizeentry.pack(padx=2, pady=2)
         Separator(t, orient='horizontal').pack(fill='x', padx=2, pady=2)
 
         label.pack(padx=2, pady=2)
@@ -254,7 +287,6 @@ class GetParameters:
     def finalize(self):
         self.namespace.user_cancelled = False
         for window in self.windows:
-            print(window)
             try:
                 window.destroy()
             except Exception:
@@ -313,7 +345,12 @@ class NotAnImageError(OSError):
     pass
 
 
-def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> List[Tuple[int, int, int, int]]:
+def bounding_boxes_for_id(
+        path: str,
+        classifier: 'cv2.CascadeClassifier',
+        min_box_width: int = 0,
+        min_box_height: int = 0
+) -> List[Tuple[int, int, int, int]]:
     '''
     This function receives a path and a face classifier and returns a list
     of 4-ples that contain bounding boxes around faces suitable for use in
@@ -339,8 +376,8 @@ def bounding_boxes_for_id(path: str, classifier: 'cv2.CascadeClassifier') -> Lis
     for i in range(len(bboxes)):
         box = bboxes[i]
         x, y, width, height = box
-        # if width < 10 or height < 10:
-        # continue
+        if width < min_box_width or height < min_box_height:
+            continue
         x1, y1, x2, y2 = x, y, x + width, y + height
         x1, y1, x2, y2 = x1 - (width // 3), y1 - (height // 2), x2 + (width // 3), y2 + (height // 2)
         x1 = lowest(x1, 0)
@@ -496,9 +533,16 @@ def test():
         draw_bounding_box(name, boxes)
 
 
-def main_for_file(path, drawOnly: bool = False, show: bool = False, limit: int = 5, write: bool = True, multiplier=1):
+def main_for_file(path,
+                  drawOnly: bool = False,
+                  show: bool = False,
+                  limit: int = 5,
+                  write: bool = True,
+                  multiplier=1,
+                  min_box_width: int = 0,
+                  min_box_height: int = 0):
     vsay(f"[-] Computing bounding boxes for {path}...")
-    boxes = bounding_boxes_for_id(path, classifier)
+    boxes = bounding_boxes_for_id(path, classifier, min_box_width=min_box_width, min_box_height=min_box_height)
 
     msg = None
     if 0 < limit < len(boxes):
@@ -548,7 +592,7 @@ def main():
                     try:
                         print('Doing {}'.format(filename))
                         msg = main_for_file(filename, drawOnly=options.box, show=options.show,
-                                            limit=options.max, multiplier=options.multiplier)
+                                            limit=options.max, multiplier=options.multiplier, min_box_height=options.min_box_height, min_box_width=options.min_box_height)
 
                         if msg is not None:
                             pass
