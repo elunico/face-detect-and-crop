@@ -30,8 +30,12 @@ def get_interactive_args():
 
     setattr(options, 'width', str(width))
 
+    height = dialog_get_int('Enter the desired height of the new images or -1 to calculate automatically')
+
+    setattr(options, 'height', str(height))
+
     if choice == 'dir':
-        directory = show_dialog(d.dselect, filepath=os.getcwd(), title="Choose the folder to place the processed image")
+        directory = show_dialog(d.dselect, filepath=directory, title="Choose the folder to place the processed image")
         setattr(options, 'output', directory)
 
     print(options)
@@ -45,13 +49,16 @@ def rename_shrunk(input, width):
     return '.'.join(new_name)
 
 
-def resize_image(filename, argwidth, destination):
+def resize_image(filename, argwidth, argheight, destination):
     img = cv2.imread(filename)
     if img is None:
         return False
     height, width, _ = img.shape
-    new_height = int(argwidth)
-    new_width = int(width * new_height / height)
+    new_width = int(argwidth)
+    if argheight == -1:
+        new_height = int(width * new_height / height)
+    else:
+        new_height = int(argheight)
     resized_img = cv2.resize(img, (new_width, new_height))
     cv2.imwrite(destination, resized_img)
     return True
@@ -59,20 +66,20 @@ def resize_image(filename, argwidth, destination):
 
 def main():
     show_dialog(d.yesno, title="Welcome to shrink", text='''
-        This program will help you shrink an image file to the correct size for Rediker's photo system. It is worth 
-        noting that the facedetect program can do this automatically when detecting faces, however, you can also do it 
+        This program will help you shrink an image file to the correct size for Rediker's photo system. It is worth
+        noting that the facedetect program can do this automatically when detecting faces, however, you can also do it
         manually here
 
-        You will be guided through the process in a series of steps using interactive dialogs 
+        You will be guided through the process in a series of steps using interactive dialogs
 
         ** INSTRUCTIONS FOR USE**
-        1) You may type to enter text in any text box. 
+        1) You may type to enter text in any text box.
         2) Use the tab key to change between buttons on the bottom
-        3) When selecting a file or a folder, a selection screen will appear. You can use tab to move to each pane and 
-        \t- You should use the spacebar to select files/folders. 
-        \tIt is important that you DO NOT HIT OK until you have used the space bar to select the desired file or folder and see its name in the box 
-        4) A help button will appear when help is available. Use tab to select and enter to press it 
-        5) Pressing cancel at any time will terminate the program completely and you will have to start over. 
+        3) When selecting a file or a folder, a selection screen will appear. You can use tab to move to each pane and
+        \t- You should use the spacebar to select files/folders.
+        \tIt is important that you DO NOT HIT OK until you have used the space bar to select the desired file or folder and see its name in the box
+        4) A help button will appear when help is available. Use tab to select and enter to press it
+        5) Pressing cancel at any time will terminate the program completely and you will have to start over.
 
         Would you like to continue using this program?
         ''')
@@ -93,7 +100,7 @@ def main():
             destination = args.file
         show_dialog(d.yesno, title="{} ready to be shrunk".format(args.file), text="Program is ready to shrink {} into {} with width {}.\nContinue?".format(args.file, destination, args.width))
         d.gauge_start(text='Processing {}'.format(args.file))
-        resize_image(args.file, args.width, destination)
+        resize_image(args.file, args.width, args.height, destination)
         d.gauge_update(100, 'Done with {}!'.format(dest_name), update_text=True)
         d.gauge_stop()
     elif args.directory:
@@ -113,7 +120,7 @@ def main():
             d.gauge_update(percentOf(i, total), text='Processing: ' + filename, update_text=True)
             new_name = rename_shrunk(path, args.width)
             new_file = os.path.join(outdir, new_name)
-            result = resize_image(filename, args.width, new_file)
+            result = resize_image(filename, args.width, args.height, new_file)
             if not result:
                 d.gauge_update(percentOf(i, total), text='Error: Could not read image named: {}'.format(filename),
                                update_text=True)
