@@ -51,8 +51,8 @@ class DetectRouteKeys:
     numeric_keys = set(['maxfaces', 'minheight', 'minwidth', 'multiplier'])
     alpha_keys = set(['operation', 'mimetype', 'filename'])
     base64_keys = set(['imagedata'])
-    all_keys: set[str]
-    required_keys: set[str]
+    all_keys = ... #: set[str]
+    required_keys = ... #: set[str]
 
 
 DetectRouteKeys.all_keys = DetectRouteKeys.numeric_keys.union(DetectRouteKeys.alpha_keys).union(DetectRouteKeys.base64_keys)
@@ -198,4 +198,4 @@ def index():
 
 if __name__ == '__main__':
     from waitress import serve
-    serve(app, host='0.0.0.0', port=8000)
+    serve(app, host='0.0.0.0', port=12001)

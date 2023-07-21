@@ -85,6 +85,9 @@ def printing(arg):
     return arg
 
 
+def dist(p1, p2):
+    return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
+
 def smoosh_box(box):
     flipflopper = flip_flop_maker()
 
@@ -93,8 +96,8 @@ def smoosh_box(box):
     dratio = dwidth / dheight
     x1, y1, x2, y2 = box
 
-    awidth = math.dist((x1, y1), (x2, y1))
-    aheight = math.dist((x1, y1), (x1, y2))
+    awidth = dist((x1, y1), (x2, y1))
+    aheight = dist((x1, y1), (x1, y2))
     aratio = awidth / aheight
     if aratio > dratio:
         while aratio > dratio and (y1 - ((aheight * 0.05) + 1)) >= 0 and (y2 + ((aheight * 0.05) + 1)) <= aheight:
@@ -102,8 +105,8 @@ def smoosh_box(box):
                 y2 += ((aheight * 0.05) + 1)
             else:
                 y1 -= ((aheight * 0.05) + 1)
-            awidth = math.dist((x1, y1), (x2, y1))
-            aheight = math.dist((x1, y1), (x1, y2))
+            awidth = dist((x1, y1), (x2, y1))
+            aheight = dist((x1, y1), (x1, y2))
             aratio = awidth / aheight
     if aratio < dratio:
         while aratio < dratio and (x1 - ((awidth * 0.05) + 1)) >= 0 and (x2 + ((awidth * 0.05) + 1)) <= awidth:
@@ -111,8 +114,8 @@ def smoosh_box(box):
                 x2 += ((awidth * 0.05) + 1)
             else:
                 x1 -= ((awidth * 0.05) + 1)
-            awidth = math.dist((x1, y1), (x2, y1))
-            aheight = math.dist((x1, y1), (x1, y2))
+            awidth = dist((x1, y1), (x2, y1))
+            aheight = dist((x1, y1), (x1, y2))
             aratio = awidth / aheight
 
     return tuple(int(i) for i in (x1, y1, x2, y2))
@@ -235,8 +238,8 @@ def draw_bounding_box2(image: 'cv2.image',  boxes: List[Tuple[int, int, int, int
     def draw_rect(img, x1, y1, x2, y2, color=(0, 0, 255)):
         image = img.copy()
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-        awidth = math.dist((x1, y1), (x2, y1))
-        aheight = math.dist((x1, y1), (x1, y2))
+        awidth = dist((x1, y1), (x2, y1))
+        aheight = dist((x1, y1), (x1, y2))
         aratio = awidth / aheight
         t = ((x1, y1), (x2, y2), (aratio))
         cv2.putText(image, f'{t!r}', (x1, y1 + 10), cv2.FONT_HERSHEY_PLAIN, 4, color)
