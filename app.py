@@ -64,13 +64,17 @@ def process_image_data(image: bytes, name: str, ext: str, dirpath: str, options:
         img.write(image)
         pixels = cv2.imread(img.name)
 
-    boxes = main_for_file(pixels, options.drawOnly, options.limit, options.squeeze, options.pad, options.resize, options.multiplier, options.minw, options.minh)
+    ensure_dir(dirpath)
 
-    if boxes:
-        ensure_dir(dirpath)
+    if pixels is None:
+        return 'No faces detected', 421
+
+    boxes = main_for_file(pixels, options.drawOnly, options.limit, options.squeeze, options.pad, options.resize, options.multiplier, options.minw, options.minh)
+    if len(boxes) > 0:
         for idx, box in enumerate(boxes):
             filepath = os.path.join(dirpath, '{}-face{}{}'.format(name, idx, ext))
             cv2.imwrite(filepath, box)
+        return None, None
     else:
         return 'No faces detected', 404
 
@@ -143,7 +147,6 @@ def detectall():
         shutil.rmtree(dirpath)
         if os.path.exists(archive + '.zip'):
             os.unlink(archive + '.zip')
-        raise e
         return 'Could not process request', 499
 
 
@@ -166,14 +169,20 @@ def detect():
         job_id = str(uuid.uuid4())
         dirpath = os.path.join('.', 'output', job_id)
         archive = os.path.join('.', 'output', job_id + '-archive')
-        process_image_data(image, name, ext, dirpath, options)
+        msg, code = process_image_data(image, name, ext, dirpath, options)
 
-        resp = zipped_response(archive, dirpath)
+        if msg is not None:
+            resp = msg, code
+        else:
+            resp = zipped_response(archive, dirpath)
+            os.unlink(archive + '.zip')
+
         shutil.rmtree(dirpath)
-        os.unlink(archive + '.zip')
         return resp
 
     except Exception as e:
+        raise
+        print(e)
         if os.path.isdir(dirpath):
             shutil.rmtree(dirpath)
         if os.path.exists(archive + '.zip'):

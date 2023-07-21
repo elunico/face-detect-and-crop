@@ -8,10 +8,10 @@ import cv2
 from typing import List, Tuple, Callable
 from tqdm import tqdm
 import os.path
-import argparse
 import math
-import pprint
 import sys
+# import argparse
+# import pprint
 
 verbose = False
 
@@ -19,22 +19,22 @@ verbose = False
 classifier = cv2.CascadeClassifier('model/haarcascade_frontalface_default.xml')
 
 
-def parse_args():
-    ap = argparse.ArgumentParser()
-    gp = ap.add_mutually_exclusive_group(required=True)
-    gp.add_argument('-d', '--directory', help='Detect faces and crop all photos in the given directory')
-    gp.add_argument('-f', '--file', help='Detect faces and crop the given photo')
-    ap.add_argument('-m', '--max', type=int, default=5, help='The maximum number of faces to extract. Defaults to 5. Use 0 for no limit')
-    ap.add_argument('-b', '--box', action='store_true', help='Do not crop, but draw the bounding box to the photo and write that out')
-    ap.add_argument('-s', '--show', action='store_true', help='Show each image as it is being output')
-    ap.add_argument('-n', '--nowrite', action='store_true', help='Perform transformations but do not write files. Implies -s.')
-    ap.add_argument('-v', '--verbose', action='store_true', help='Produce incremental output for monitoring')
-    ap.add_argument('-q', '--quiet', action='store_true', help='Produce no ouptut unless there is an exception')
-    ap.add_argument('-z', '--squeeze', action='store_true', help='Fit the output boxes to the ASPECT ratio for Rediker by growing boxes until they are the approximate aspect ratio of 190x237 but not NOT actually change the size')
-    gp = ap.add_mutually_exclusive_group()
-    gp.add_argument('-p', '--pad', action='store_true', help='Fit the output boxes to the 190x237 shape for Rediker by adding white padding and shrinking. implies -r')
-    gp.add_argument('-r', '--resize', action='store_true', help='Resize the image to be 190x237 plainly as it is. Can be combined with -z to prevent excess distortion when resizing')
-    return ap.parse_args()
+# def parse_args():
+#     ap = argparse.ArgumentParser()
+#     gp = ap.add_mutually_exclusive_group(required=True)
+#     gp.add_argument('-d', '--directory', help='Detect faces and crop all photos in the given directory')
+#     gp.add_argument('-f', '--file', help='Detect faces and crop the given photo')
+#     ap.add_argument('-m', '--max', type=int, default=5, help='The maximum number of faces to extract. Defaults to 5. Use 0 for no limit')
+#     ap.add_argument('-b', '--box', action='store_true', help='Do not crop, but draw the bounding box to the photo and write that out')
+#     ap.add_argument('-s', '--show', action='store_true', help='Show each image as it is being output')
+#     ap.add_argument('-n', '--nowrite', action='store_true', help='Perform transformations but do not write files. Implies -s.')
+#     ap.add_argument('-v', '--verbose', action='store_true', help='Produce incremental output for monitoring')
+#     ap.add_argument('-q', '--quiet', action='store_true', help='Produce no ouptut unless there is an exception')
+#     ap.add_argument('-z', '--squeeze', action='store_true', help='Fit the output boxes to the ASPECT ratio for Rediker by growing boxes until they are the approximate aspect ratio of 190x237 but not NOT actually change the size')
+#     gp = ap.add_mutually_exclusive_group()
+#     gp.add_argument('-p', '--pad', action='store_true', help='Fit the output boxes to the 190x237 shape for Rediker by adding white padding and shrinking. implies -r')
+#     gp.add_argument('-r', '--resize', action='store_true', help='Resize the image to be 190x237 plainly as it is. Can be combined with -z to prevent excess distortion when resizing')
+#     return ap.parse_args()
 
 
 def get_name_and_extension(filename):
@@ -270,61 +270,61 @@ def vsay(msg, end="\n"):
         print(msg, end=end)
 
 
-def main():
-    global verbose
-    options = parse_args()
-    verbose = options.verbose
-    subdir = 'marked' if options.box else 'cropped'
-    if options.directory:
-        os.chdir(options.directory)
-        ensure_dir(os.path.join(options.directory, subdir))
-        vsay(f'[-] Reading files in {options.directory}...')
-        if options.verbose or options.quiet:
-            iterator = os.listdir('.')
-        else:
-            print(f'Working on files in: "{options.directory}"...')
-            iterator = tqdm(os.listdir('.'))
-        for filename in iterator:
-            vsay(f'[-] Reading file {filename}')
-            name, ext = get_name_and_extension(filename)
-            if not os.path.isdir(filename):
-                try:
-                    pixels = cv2.imread(filename)
-                    pixels = main_for_file(pixels, drawOnly=options.box, limit=options.max, squeeze=options.squeeze)
-                    if not options.nowrite:
-                        for idx, box in enumerate(pixels):
-                            if idx >= options.max:
-                                print("Too many boxes. Stopping")
-                                break
-                            cv2.imwrite(os.path.join(options.directory, subdir, '{}-box{}.{}'.format(name, idx + 1, ext)), box)
-                except Exception:
-                    print("Failed to operate on file '{}'. \nSettings: {}\n\n".format(filename, options))
-                    raise
-            else:
-                vsay(f"[*] Skipping {filename}: is directory.")
-            vsay('*=' * 2 + f'Done with "{filename}"' + '*=' * 2)
-        vsay('=*' * 40)
-        vsay(f'Done with directory "{options.directory}"'.center(80))
-        vsay('=*' * 40)
-    elif options.file:
-        path, filename = path_to_components(options.file)
-        name, ext = get_name_and_extension(filename)
-        ensure_dir(os.path.join(path, subdir))
-        vsay(f"[-] Processing file: {options.file}...")
-        try:
-            pixels = cv2.imread(options.file)
-            pixels = main_for_file(pixels, drawOnly=options.box, limit=options.max, squeeze=options.squeeze)
-            if not options.nowrite:
-                for idx, box in enumerate(pixels):
-                    if idx >= options.max:
-                        print("Too many boxes. Stopping")
-                        break
-                    cv2.imwrite(os.path.join(path, subdir, '{}-box{}.{}'.format(name, idx + 1, ext)), box)
-        except Exception:
-            print("Failed to operate on file '{}'. \nSettings: {}\n\n".format(options.file, options))
-            raise
-        vsay('*=' * 2 + f'Done with "{options.file}"' + '*=' * 2)
+# def main():
+#     global verbose
+#     options = parse_args()
+#     verbose = options.verbose
+#     subdir = 'marked' if options.box else 'cropped'
+#     if options.directory:
+#         os.chdir(options.directory)
+#         ensure_dir(os.path.join(options.directory, subdir))
+#         vsay(f'[-] Reading files in {options.directory}...')
+#         if options.verbose or options.quiet:
+#             iterator = os.listdir('.')
+#         else:
+#             print(f'Working on files in: "{options.directory}"...')
+#             iterator = tqdm(os.listdir('.'))
+#         for filename in iterator:
+#             vsay(f'[-] Reading file {filename}')
+#             name, ext = get_name_and_extension(filename)
+#             if not os.path.isdir(filename):
+#                 try:
+#                     pixels = cv2.imread(filename)
+#                     pixels = main_for_file(pixels, drawOnly=options.box, limit=options.max, squeeze=options.squeeze)
+#                     if not options.nowrite:
+#                         for idx, box in enumerate(pixels):
+#                             if idx >= options.max:
+#                                 print("Too many boxes. Stopping")
+#                                 break
+#                             cv2.imwrite(os.path.join(options.directory, subdir, '{}-box{}.{}'.format(name, idx + 1, ext)), box)
+#                 except Exception:
+#                     print("Failed to operate on file '{}'. \nSettings: {}\n\n".format(filename, options))
+#                     raise
+#             else:
+#                 vsay(f"[*] Skipping {filename}: is directory.")
+#             vsay('*=' * 2 + f'Done with "{filename}"' + '*=' * 2)
+#         vsay('=*' * 40)
+#         vsay(f'Done with directory "{options.directory}"'.center(80))
+#         vsay('=*' * 40)
+#     elif options.file:
+#         path, filename = path_to_components(options.file)
+#         name, ext = get_name_and_extension(filename)
+#         ensure_dir(os.path.join(path, subdir))
+#         vsay(f"[-] Processing file: {options.file}...")
+#         try:
+#             pixels = cv2.imread(options.file)
+#             pixels = main_for_file(pixels, drawOnly=options.box, limit=options.max, squeeze=options.squeeze)
+#             if not options.nowrite:
+#                 for idx, box in enumerate(pixels):
+#                     if idx >= options.max:
+#                         print("Too many boxes. Stopping")
+#                         break
+#                     cv2.imwrite(os.path.join(path, subdir, '{}-box{}.{}'.format(name, idx + 1, ext)), box)
+#         except Exception:
+#             print("Failed to operate on file '{}'. \nSettings: {}\n\n".format(options.file, options))
+#             raise
+#         vsay('*=' * 2 + f'Done with "{options.file}"' + '*=' * 2)
 
 
-if __name__ == '__main__':
-    exit(main())
+# if __name__ == '__main__':
+#     exit(main())
