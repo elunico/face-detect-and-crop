@@ -118,7 +118,16 @@ def smoosh_box(box):
     return tuple(int(i) for i in (x1, y1, x2, y2))
 
 
-def bounding_boxes_for_id(pixels, classifier: 'cv2.CascadeClassifier') -> List[Tuple[int, int, int, int]]:
+class NotAnImageError(OSError):
+    pass
+
+
+def bounding_boxes_for_id(
+        pixels: 'cv2.image',
+        classifier: 'cv2.CascadeClassifier',
+        min_box_width: int = 0,
+        min_box_height: int = 0
+) -> List[Tuple[int, int, int, int]]:
     '''
     This function receives a path and a face classifier and returns a list
     of 4-ples that contain bounding boxes around faces suitable for use in
@@ -133,7 +142,9 @@ def bounding_boxes_for_id(pixels, classifier: 'cv2.CascadeClassifier') -> List[T
 
     WARNING: THIS WILL NOT REMOVE bounding boxes less than 10 pixels in EITHER height or width or both
     '''
-
+    # load the photograph
+    if pixels is None:
+        raise NotAnImageError
     # perform face detection
     bboxes = classifier.detectMultiScale(pixels)
     # print bounding box for each detected face
@@ -141,10 +152,10 @@ def bounding_boxes_for_id(pixels, classifier: 'cv2.CascadeClassifier') -> List[T
     for i in range(len(bboxes)):
         box = bboxes[i]
         x, y, width, height = box
-        # if width < 10 or height < 10:
-        # continue
+        if width < min_box_width or height < min_box_height:
+            continue
         x1, y1, x2, y2 = x, y, x + width, y + height
-        x1, y1, x2, y2 = x1 - (width//3), y1 - (height//2), x2 + (width//3), y2 + (height//2)
+        x1, y1, x2, y2 = x1 - (width // 3), y1 - (height // 2), x2 + (width // 3), y2 + (height // 2)
         x1 = lowest(x1, 0)
         y1 = lowest(y1, 0)
         x2 = highest(x2, pixels.shape[1] - 1)
@@ -163,61 +174,58 @@ def on_each_box2(pixels: 'cv2.image', boxes: List[Tuple[int, int, int, int]], tr
     return results
 
 
-def padded_resize(img, size, padColor=(255, 255, 255)):
-    # https://stackoverflow.com/questions/44720580/resize-image-canvas-to-maintain-square-aspect-ratio-in-python-opencv
+class FDOptions:
+    def __init__(self, pad=True, resize=True, multiplier=1) -> None:
+        self.pad = pad
+        self.resize = resize
+        self.multiplier = multiplier
+
+
+def calculate_padding(img, ratio_size):
     h, w = img.shape[:2]
-    sh, sw = size
+    th, tw = ratio_size
+    goal_aspect = tw / th
+    current_aspect = w / h
 
-    # interpolation method
-    if h > sh or w > sw:  # shrinking image
-        interp = cv2.INTER_AREA
-    else:  # stretching image
-        interp = cv2.INTER_CUBIC
+    padding_height = 0
+    padding_width = 0
+    if goal_aspect > current_aspect:
+        while goal_aspect > current_aspect:
+            padding_width += 1
+            current_aspect = (w + padding_width) / (h + padding_height)
 
-    # aspect ratio of image
-    aspect = w/h  # if on Python 2, you might need to cast as a float: float(w)/h
+    if goal_aspect < current_aspect:
+        while goal_aspect < current_aspect:
+            padding_height += 1
+            current_aspect = (w + padding_width) / (h + padding_height)
 
-    # compute scaling and pad sizing
-    if aspect > 1:  # horizontal image
-        new_w = sw
-        new_h = np.round(new_w/aspect).astype(int)
-        pad_vert = abs((sh-new_h)/2)
-        pad_top, pad_bot = np.floor(pad_vert).astype(int), np.ceil(pad_vert).astype(int)
-        pad_left, pad_right = 0, 0
-    elif aspect < 1:  # vertical image
-        new_h = sh
-        new_w = np.round(new_h*aspect).astype(int)
-        pad_horz = abs((sw-new_w)/2)
-        pad_left, pad_right = np.floor(pad_horz).astype(int), np.ceil(pad_horz).astype(int)
-        pad_top, pad_bot = 0, 0
-    else:  # square image
-        new_h, new_w = sh, sw
-        pad_left, pad_right, pad_top, pad_bot = 0, 0, 0, 0
+    pad_left, pad_right = (padding_width // 2), ((padding_width // 2) + (padding_width % 2))
+    pad_top, pad_bottom = (padding_height // 2), ((padding_height // 2) + (padding_height % 2))
 
-    # set pad color
-    if len(img.shape) == 3 and not isinstance(padColor, (list, tuple, np.ndarray)):  # color image but only one color provided
-        padColor = [padColor]*3
+    return pad_left, pad_right, pad_top, pad_bottom
 
-    # scale and pad
-    scaled_img = cv2.resize(img, (new_w, new_h), interpolation=interp)
-    scaled_img = cv2.copyMakeBorder(scaled_img, pad_top, pad_bot, pad_left, pad_right, borderType=cv2.BORDER_CONSTANT, value=padColor)
 
+def pad_image(img, ratio_size, pad_color=(255, 255, 255)):
+    pad_left, pad_right, pad_top, pad_bottom = calculate_padding(img, ratio_size)
+    scaled_img = cv2.copyMakeBorder(img, pad_top, pad_bottom, pad_left, pad_right, borderType=cv2.BORDER_CONSTANT,
+                                    value=pad_color)
     return scaled_img
 
 
-class FDOptions:
-    def __init__(self, pad=True, resize=True) -> None:
-        self.pad = pad
-        self.resize = resize
+def transpose(pair):
+    return pair[1], pair[0]
 
 
 def crop_to_boxes2(image: 'cv2.image', boxes: List[Tuple[int, int, int, int]], options: FDOptions = FDOptions()) -> List['cv2.image']:
+    dest_size = (190 * options.multiplier, 237 * options. multiplier)
+
     def cropnshrink(img, x1, y1, x2, y2):
         i = img[y1:y2, x1:x2]
         if options.pad:
-            i = padded_resize(i, (237, 190))
+            i = pad_image(i, transpose(dest_size))
+            i = cv2.resize(i, dest_size)
         elif options.resize:
-            i = cv2.resize(i, (190, 237))
+            i = cv2.resize(i, dest_size)
         return i
 
     return on_each_box2(image, boxes, cropnshrink)
@@ -237,10 +245,9 @@ def draw_bounding_box2(image: 'cv2.image',  boxes: List[Tuple[int, int, int, int
     return on_each_box2(image, boxes, draw_rect)
 
 
-def main_for_file(pixels, drawOnly: bool = False, limit: int = 5, squeeze: bool = True, pad: bool = True, resize: bool = True):
+def main_for_file(pixels, drawOnly: bool = False, limit: int = 5, squeeze: bool = True, pad: bool = True, resize: bool = True, multiplier: int = 1, min_box_width: int = 0, min_box_height: int = 0):
     # load the photograph
-
-    boxes = bounding_boxes_for_id(pixels, classifier)
+    boxes = bounding_boxes_for_id(pixels, classifier, min_box_width, min_box_height)
     for i in range(len(boxes)):
         # fit the boxes to an aspect ratio without loosing information (expand boxes)
         if squeeze:
@@ -255,7 +262,7 @@ def main_for_file(pixels, drawOnly: bool = False, limit: int = 5, squeeze: bool 
     if drawOnly:
         return draw_bounding_box2(pixels, boxes)
     else:
-        return crop_to_boxes2(pixels, boxes, FDOptions(pad=pad, resize=resize))
+        return crop_to_boxes2(pixels, boxes, FDOptions(pad=pad, resize=resize, multiplier=multiplier))
 
 
 def vsay(msg, end="\n"):

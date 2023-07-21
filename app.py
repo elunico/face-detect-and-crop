@@ -4,15 +4,47 @@ import os
 import shutil
 import subprocess
 import tempfile
+from typing import Any, Optional, Tuple, Union
 import uuid
 import zipfile
 import cv2
-from flask import Flask, request, make_response
+from flask import Flask, request, make_response, Response
 from facedetect import ensure_dir, get_name_and_extension, main_for_file
 
 ensure_dir('output')
 
 app = Flask(__name__)
+
+
+class ProcessOptions:
+    @classmethod
+    def frombody(cls, body):
+        return cls(
+            drawOnly='box' in body['operation'],
+            limit=body['maxfaces'],
+            resize='resize' in body['operation'],
+            pad='pad' in body['operation'],
+            multiplier=body['multiplier'],
+            minw=body['minwidth'],
+            minh=body['minheight'])
+
+    def __init__(self, drawOnly=False,
+                 limit=5,
+                 resize=True,
+                 pad=True,
+                 squeeze=True,
+                 multiplier=1,
+                 minw=0,
+                 minh=0) -> None:
+
+        self.drawOnly = drawOnly
+        self.limit = limit
+        self.resize = resize
+        self.pad = pad
+        self.squeeze = squeeze
+        self.multiplier = multiplier
+        self.minw = minw
+        self.minh = minh
 
 
 class DetectRouteKeys:
@@ -27,12 +59,12 @@ DetectRouteKeys.all_keys = DetectRouteKeys.numeric_keys.union(DetectRouteKeys.al
 DetectRouteKeys.required_keys = DetectRouteKeys.all_keys
 
 
-def process_image_data(image, name, ext, dirpath):
+def process_image_data(image: bytes, name: str, ext: str, dirpath: str, options: ProcessOptions):
     with tempfile.NamedTemporaryFile('wb+') as img:
         img.write(image)
         pixels = cv2.imread(img.name)
 
-    boxes = main_for_file(pixels)
+    boxes = main_for_file(pixels, options.drawOnly, options.limit, options.squeeze, options.pad, options.resize, options.multiplier, options.minw, options.minh)
 
     if boxes:
         ensure_dir(dirpath)
@@ -43,7 +75,7 @@ def process_image_data(image, name, ext, dirpath):
         return 'No faces detected', 404
 
 
-def validate_body(body):
+def validate_body(body: Any) -> Tuple[Union[str, Any], Optional[int]]:
     if not all(i in DetectRouteKeys.required_keys for i in body.keys()):
         return 'Request body missing keys', 400
 
@@ -58,7 +90,7 @@ def validate_body(body):
     return body, None
 
 
-def zipped_response(zipfilename, zippingdir):
+def zipped_response(zipfilename: str, zippingdir: str) -> Response:
     shutil.make_archive(zipfilename, 'zip', zippingdir)
     with open(zipfilename + '.zip', 'rb') as result:
         resp = make_response(result.read())
@@ -73,6 +105,8 @@ def detectall():
     body, error = validate_body(body)
     if error is not None:
         return body, error
+
+    options = ProcessOptions.frombody(body)
 
     job_id = str(uuid.uuid4())
 
@@ -98,7 +132,7 @@ def detectall():
                     fullpath = os.path.join(directory, image)
                     if not os.path.isdir(fullpath):
                         with open(fullpath, 'rb') as i:
-                            process_image_data(i.read(), name, ext, dirpath)
+                            process_image_data(i.read(), name, ext, dirpath, options)
 
         resp = zipped_response(archive, dirpath)
         shutil.rmtree(dirpath)
@@ -109,6 +143,7 @@ def detectall():
         shutil.rmtree(dirpath)
         if os.path.exists(archive + '.zip'):
             os.unlink(archive + '.zip')
+        raise e
         return 'Could not process request', 499
 
 
@@ -120,6 +155,8 @@ def detect():
     if error is not None:
         return body, error
 
+    options = ProcessOptions.frombody(body)
+
     try:
         image = base64.urlsafe_b64decode(body['imagedata'])
         name, ext = get_name_and_extension(body['filename'])
@@ -129,7 +166,7 @@ def detect():
         job_id = str(uuid.uuid4())
         dirpath = os.path.join('.', 'output', job_id)
         archive = os.path.join('.', 'output', job_id + '-archive')
-        process_image_data(image, name, ext, dirpath)
+        process_image_data(image, name, ext, dirpath, options)
 
         resp = zipped_response(archive, dirpath)
         shutil.rmtree(dirpath)
