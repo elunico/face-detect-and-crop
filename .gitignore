@@ -5,3 +5,4 @@ test
 cropped
 .idea
 __pycache__
+output/

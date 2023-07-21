@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+
+  <title>Face Detect and Crop</title>
+  <style>
+    .step-holder {
+      border: 2px solid black;
+      border-bottom: 1px solid black;
+      /* margin: 15px 0; */
+      padding: 15px;
+    }
+  </style>
+
+  <script src="static/index.js" defer>
+
+  </script>
+</head>
+
+<body>
+  <h1>Face Detect and Crop</h1>
+
+  <div class="step-holder">
+    <div class="step" id="step0">Submission</div>
+    <select name="batch" id="batch">
+      <option value="zippedfolder">Zipped Folder</option>
+      <option value="file">Single File</option>
+    </select>
+  </div>
+
+  <div class="step-holder">
+    <div class="step" id="step1">1. Choose an image file</div>
+    <input type="file" name="image" id="image">
+  </div>
+
+  <div class="step-holder">
+    <div class="step" id="step2">2. Specify the maximum number of faces to find</div>
+    <input type="number" name="maxfaces" id="maxfaces" value="5">
+  </div>
+
+  <div class="step-holder">
+    <div class="step" id="step3">3. Choose minimum face height</div>
+    <input type="number" name="minheight" id="minheight" value="400">
+  </div>
+
+  <div class="step-holder">
+    <div class="step" id="step4">4. Choose minimum face width</div>
+    <input type="number" name="minwidth" id="minwidth" value="200">
+  </div>
+
+  <div class="step-holder">
+    <div class="step" id="step5">5. Choose operation</div>
+    <select name="operation" id="operation">
+      <option value="padresize">Padded Resize</option>
+      <option value="plainresize">Plain Resize</option>
+      <option value="crop">Crop</option>
+      <option value="box">Box</option>
+    </select>
+  </div>
+
+  <div class="step-holder">
+    <div class="step" id="step6">6. Choose Rediker size multiplier</div>
+    <select name="multiplier" id="multiplier">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+  </div>
+
+  <button id="gobutton">Go!</button>
+
+  <div id="statusResponse">
+
+  </div>
+
+  <a hidden id="downloader" download="box" href=""></a>
+</body>
+
+</html>
