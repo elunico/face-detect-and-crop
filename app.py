@@ -1,5 +1,6 @@
 
 import base64
+import binascii
 import os
 import shutil
 import subprocess
@@ -51,8 +52,8 @@ class DetectRouteKeys:
     numeric_keys = set(['maxfaces', 'minheight', 'minwidth', 'multiplier'])
     alpha_keys = set(['operation', 'mimetype', 'filename'])
     base64_keys = set(['imagedata'])
-    all_keys = ... #: set[str]
-    required_keys = ... #: set[str]
+    all_keys = ...  # : set[str]
+    required_keys = ...  # : set[str]
 
 
 DetectRouteKeys.all_keys = DetectRouteKeys.numeric_keys.union(DetectRouteKeys.alpha_keys).union(DetectRouteKeys.base64_keys)
@@ -67,7 +68,7 @@ def process_image_data(image: bytes, name: str, ext: str, dirpath: str, options:
     ensure_dir(dirpath)
 
     if pixels is None:
-        return 'No faces detected', 421
+        return 'No faces detected', 498
 
     boxes = main_for_file(pixels, options.drawOnly, options.limit, options.squeeze, options.pad, options.resize, options.multiplier, options.minw, options.minh)
     if len(boxes) > 0:
@@ -118,8 +119,12 @@ def detectall():
     archive = os.path.join('.', 'output', job_id + '-archive')
     ensure_dir(dirpath)
     try:
-        zip = base64.urlsafe_b64decode(body['imagedata'])
-        name, ext = get_name_and_extension(body['filename'])
+        try:
+            zip = base64.urlsafe_b64decode(body['imagedata'])
+        except binascii.Error as e:
+            raise ValueError from e
+
+        _, ext = get_name_and_extension(body['filename'])
 
         assert '..' not in ext and all(i == '.' or i.isalnum() for i in ext)
         with tempfile.NamedTemporaryFile('wb+') as img:
@@ -133,6 +138,8 @@ def detectall():
 
                 for image in os.listdir(directory):
                     name, ext = get_name_and_extension(image)
+                    if '..' in name or '/' in name or '..' in ext or '/' in ext:
+                        raise FileNameError()
                     fullpath = os.path.join(directory, image)
                     if not os.path.isdir(fullpath):
                         with open(fullpath, 'rb') as i:
@@ -142,12 +149,28 @@ def detectall():
         shutil.rmtree(dirpath)
         os.unlink(archive + '.zip')
         return resp
+    except FileNameError as e:
+        if os.path.isdir(dirpath):
+            shutil.rmtree(dirpath)
+        if os.path.exists(archive + '.zip'):
+            os.unlink(archive + '.zip')
+        return 'A file in your zip archive has an invalid name', 400
+    except ValueError as e:
+        if os.path.isdir(dirpath):
+            shutil.rmtree(dirpath)
+        if os.path.exists(archive + '.zip'):
+            os.unlink(archive + '.zip')
+        return 'Invalid zip file', 400
 
     except Exception as e:
         shutil.rmtree(dirpath)
         if os.path.exists(archive + '.zip'):
             os.unlink(archive + '.zip')
         return 'Could not process request', 499
+
+
+class FileNameError(ValueError, OSError):
+    pass
 
 
 @app.post('/detect')
@@ -161,14 +184,21 @@ def detect():
     options = ProcessOptions.frombody(body)
 
     try:
-        image = base64.urlsafe_b64decode(body['imagedata'])
+        try:
+            image = base64.urlsafe_b64decode(body['imagedata'])
+        except binascii.Error as e:
+            raise ValueError from e
+
         name, ext = get_name_and_extension(body['filename'])
 
         assert '..' not in ext and all(i == '.' or i.isalnum() for i in ext)
+        if '..' in name or '/' in name or '..' in ext or '/' in ext:
+            raise FileNameError()
 
         job_id = str(uuid.uuid4())
         dirpath = os.path.join('.', 'output', job_id)
         archive = os.path.join('.', 'output', job_id + '-archive')
+
         msg, code = process_image_data(image, name, ext, dirpath, options)
 
         if msg is not None:
@@ -179,9 +209,11 @@ def detect():
 
         shutil.rmtree(dirpath)
         return resp
-
+    except FileNameError:
+        return 'Invalid file name', 400
+    except ValueError as e:
+        return 'Invalid image file', 400
     except Exception as e:
-        raise
         print(e)
         if os.path.isdir(dirpath):
             shutil.rmtree(dirpath)
