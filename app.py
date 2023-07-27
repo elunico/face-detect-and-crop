@@ -11,6 +11,7 @@ import zipfile
 import cv2
 from flask import Flask, request, make_response, Response
 from facedetect import ensure_dir, get_name_and_extension, main_for_file
+from multiprocessing import Pool
 
 ensure_dir('output')
 
@@ -103,6 +104,10 @@ def zipped_response(zipfilename: str, zippingdir: str) -> Response:
         return resp
 
 
+def do_multiprocess(path, name, ext, dirpath, options):
+    with open(path, 'rb') as i:
+        process_image_data(i.read(), name, ext, dirpath, options)
+
 @app.post('/detectall')
 def detectall():
     body = request.json
@@ -136,14 +141,18 @@ def detectall():
                 for name in names:
                     source_archive.extract(name, directory)
 
+                collection = []
                 for image in os.listdir(directory):
                     name, ext = get_name_and_extension(image)
                     if '..' in name or '/' in name or '..' in ext or '/' in ext:
                         raise FileNameError()
                     fullpath = os.path.join(directory, image)
                     if not os.path.isdir(fullpath):
-                        with open(fullpath, 'rb') as i:
-                            process_image_data(i.read(), name, ext, dirpath, options)
+                        collection.append((fullpath, name, ext, dirpath, options))
+
+                with Pool() as pool:
+                    for result in pool.starmap(do_multiprocess, collection):
+                        print('completed {}'.format(result))
 
         resp = zipped_response(archive, dirpath)
         shutil.rmtree(dirpath)
@@ -154,18 +163,24 @@ def detectall():
             shutil.rmtree(dirpath)
         if os.path.exists(archive + '.zip'):
             os.unlink(archive + '.zip')
+        if os.environ["DEBUG"]:
+            raise e
         return 'A file in your zip archive has an invalid name', 400
     except ValueError as e:
         if os.path.isdir(dirpath):
             shutil.rmtree(dirpath)
         if os.path.exists(archive + '.zip'):
             os.unlink(archive + '.zip')
+        if os.environ["DEBUG"]:
+            raise e
         return 'Invalid zip file', 400
 
     except Exception as e:
         shutil.rmtree(dirpath)
         if os.path.exists(archive + '.zip'):
             os.unlink(archive + '.zip')
+        if os.environ["DEBUG"]:
+            raise e
         return 'Could not process request', 499
 
 
