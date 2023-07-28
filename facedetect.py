@@ -3,16 +3,17 @@
 # https://stackoverflow.com/questions/15589517/how-to-crop-an-image-in-opencv-using-python
 # https://docs.opencv.org/3.1.0/d7/d8b/tutorial_py_face_detection.html#gsc.tab=0
 
-import numpy as np
-import cv2
-from typing import List, Tuple, Callable
-from tqdm import tqdm
-import os.path
-import math
-import sys
 import argparse
-import pprint
+import math
+import os.path
+import sys
 from multiprocessing import Pool
+from typing import Callable, List, Tuple, Union
+
+import cv2
+from tqdm import tqdm
+
+Box = Tuple[int, int, int, int]
 
 verbose = False
 
@@ -20,6 +21,7 @@ verbose = False
 def parse_args():
     ap = argparse.ArgumentParser()
     gp = ap.add_mutually_exclusive_group(required=True)
+    gp.add_argument('-g', '--gui', help='Open a gui version of the program. Ignores all other options', action='store_true')
     gp.add_argument('-d', '--directory', help='Detect faces and crop all photos in the given directory')
     gp.add_argument('-f', '--file', help='Detect faces and crop the given photo')
     ap.add_argument('-m', '--max', type=int, default=5, help='The maximum number of faces to extract. Defaults to 5. Use 0 for no limit')
@@ -35,41 +37,30 @@ def parse_args():
     return ap.parse_args()
 
 
-def get_name_and_extension(filename):
-    if '.' in filename:
-        *name, ext = filename.rsplit('.')
-        ext = '.' + ext
-        name = '.'.join(name)
-    else:
-        name, ext = filename, ''
-    return name, ext
+def get_name_and_extension(filename: str) -> Tuple[str, str]:
+    if '.' not in filename:
+        return filename, ''
+
+    name, dot, ext = filename.rpartition('.')
+    return name, dot + ext
 
 
-def path_to_components(path):
-    # sep = os.path.sep
-    # parts = os.path.split(path)
-    # if len(parts) == 1:
-    #     return '', parts[0]
-    # directory = sep.join(parts[:-1])
-    # directory = sep + directory if not path.startswith(sep) else directory
-    # return directory, parts[-1]
+def path_to_components(path: str) -> Tuple[str, str]:
     return os.path.split(path)
 
 
 def ensure_dir(dirpath):
     if not os.path.isdir(dirpath) and not os.path.exists(dirpath):
         os.mkdir(dirpath)
+    elif not os.path.isdir(dirpath) and os.path.exists(dirpath):
+        raise OSError('Program requires {} to be a directory but it is not'.format(dirpath))
 
 
-def highest(value, limit):
-    if value > limit:
-        value = limit
-    return value
-
-
-def lowest(value, limit):
-    if value < limit:
-        value = limit
+def constrain(value: Union[int, float], *, minimum: Union[int, float] = None, maximum: Union[int, float] = None) -> Union[int, float]:
+    if minimum is not None and value < minimum:
+        return minimum
+    if maximum is not None and value > maximum:
+        return maximum
     return value
 
 
@@ -79,12 +70,7 @@ def flip_flop_maker(flag=True):
         flag = not flag
 
 
-def printing(arg):
-    print(arg)
-    return arg
-
-
-def smoosh_box(box):
+def smoosh_box(box: Box) -> Box:
     flipflopper = flip_flop_maker()
 
     dwidth = 190
@@ -126,7 +112,7 @@ def bounding_boxes_for_id(
         classifier: 'cv2.CascadeClassifier',
         min_box_width: int = 0,
         min_box_height: int = 0
-) -> List[Tuple[int, int, int, int]]:
+) -> List[Box]:
     '''
     This function receives a path and a face classifier and returns a list
     of 4-ples that contain bounding boxes around faces suitable for use in
@@ -155,15 +141,15 @@ def bounding_boxes_for_id(
             continue
         x1, y1, x2, y2 = x, y, x + width, y + height
         x1, y1, x2, y2 = x1 - (width // 3), y1 - (height // 2), x2 + (width // 3), y2 + (height // 2)
-        x1 = lowest(x1, 0)
-        y1 = lowest(y1, 0)
-        x2 = highest(x2, pixels.shape[1] - 1)
-        y2 = highest(y2, pixels.shape[0] - 1)
+        x1 = constrain(x1, minimum=0)
+        y1 = constrain(y1, minimum=0)
+        x2 = constrain(x2, maximum=pixels.shape[1] - 1)
+        y2 = constrain(y2, maximum=pixels.shape[0] - 1)
         faces.append((x1, y1, x2, y2))
     return faces
 
 
-def on_each_box2(pixels: 'cv2.image', boxes: List[Tuple[int, int, int, int]], transform: Callable[['cv2.image', int, int, int, int], 'cv2.image']) -> List['cv2.image']:
+def on_each_box2(pixels: 'cv2.image', boxes: List[Box], transform: Callable[['cv2.image', int, int, int, int], 'cv2.image']) -> List['cv2.image']:
     image = pixels
     results = []
     for i in range(len(boxes)):
@@ -215,7 +201,7 @@ def transpose(pair):
     return pair[1], pair[0]
 
 
-def crop_to_boxes2(image: 'cv2.image', boxes: List[Tuple[int, int, int, int]], options: FDOptions = FDOptions()) -> List['cv2.image']:
+def crop_to_boxes2(image: 'cv2.image', boxes: List[Box], options: FDOptions = FDOptions()) -> List['cv2.image']:
     dest_size = (190 * options.multiplier, 237 * options. multiplier)
 
     def cropnshrink(img, x1, y1, x2, y2):
@@ -230,7 +216,7 @@ def crop_to_boxes2(image: 'cv2.image', boxes: List[Tuple[int, int, int, int]], o
     return on_each_box2(image, boxes, cropnshrink)
 
 
-def draw_bounding_box2(image: 'cv2.image',  boxes: List[Tuple[int, int, int, int]]) -> 'List[cv2.image]':
+def draw_bounding_box2(image: 'cv2.image',  boxes: List[Box]) -> 'List[cv2.image]':
     def draw_rect(img, x1, y1, x2, y2, color=(0, 0, 255)):
         image = img.copy()
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
@@ -291,6 +277,10 @@ def main():
     options = parse_args()
     verbose = options.verbose
     subdir = 'marked' if options.box else 'cropped'
+    if options.gui:
+        from fdmaingui import fdgui
+        fdgui()
+        return
     if options.directory:
         ensure_dir(os.path.join(options.directory, subdir))
         vsay(f'[-] Reading files in {options.directory}...')

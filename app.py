@@ -3,65 +3,32 @@ import base64
 import binascii
 import os
 import shutil
-import subprocess
+import sys
 import tempfile
-from typing import Any, Optional, Tuple, Union
+import threading
 import uuid
+import webbrowser
 import zipfile
-import cv2
-from flask import Flask, request, make_response, Response
-from facedetect import ensure_dir, get_name_and_extension, main_for_file
 from multiprocessing import Pool
+from typing import Any, Optional, Tuple, Union
+
+import cv2
+from flask import Flask, Response, make_response, request
+
+from appclasses import *
+from facedetect import ensure_dir, get_name_and_extension, main_for_file
+from shrink import resize_image_bytes
 
 ensure_dir('output')
 
 app = Flask(__name__)
 
 
-class ProcessOptions:
-    @classmethod
-    def frombody(cls, body):
-        return cls(
-            drawOnly='box' in body['operation'],
-            limit=body['maxfaces'],
-            resize='resize' in body['operation'],
-            pad='pad' in body['operation'],
-            multiplier=body['multiplier'],
-            minw=body['minwidth'],
-            minh=body['minheight'])
-
-    def __init__(self, drawOnly=False,
-                 limit=5,
-                 resize=True,
-                 pad=True,
-                 squeeze=True,
-                 multiplier=1,
-                 minw=0,
-                 minh=0) -> None:
-
-        self.drawOnly = drawOnly
-        self.limit = limit
-        self.resize = resize
-        self.pad = pad
-        self.squeeze = squeeze
-        self.multiplier = multiplier
-        self.minw = minw
-        self.minh = minh
+def next_job_id():
+    return str(uuid.uuid4())
 
 
-class DetectRouteKeys:
-    numeric_keys = set(['maxfaces', 'minheight', 'minwidth', 'multiplier'])
-    alpha_keys = set(['operation', 'mimetype', 'filename'])
-    base64_keys = set(['imagedata'])
-    all_keys: set[str]
-    required_keys: set[str]
-
-
-DetectRouteKeys.all_keys = DetectRouteKeys.numeric_keys.union(DetectRouteKeys.alpha_keys).union(DetectRouteKeys.base64_keys)
-DetectRouteKeys.required_keys = DetectRouteKeys.all_keys
-
-
-def process_image_data(image: bytes, name: str, ext: str, dirpath: str, options: ProcessOptions):
+def process_image_data(image: bytes, name: str, ext: str, dirpath: str, options: FaceDetectOptions) -> Union[Tuple[None, None], Tuple[str, int]]:
     with tempfile.NamedTemporaryFile('wb+') as img:
         img.write(image)
         pixels = cv2.imread(img.name)
@@ -81,11 +48,11 @@ def process_image_data(image: bytes, name: str, ext: str, dirpath: str, options:
         return 'No faces detected', 404
 
 
-def validate_body(body: Any) -> Tuple[Union[str, Any], Optional[int]]:
-    if not all(i in DetectRouteKeys.required_keys for i in body.keys()):
+def validate_body(body: Any, KeySetClass) -> Tuple[Union[str, Any], Optional[int]]:
+    if not all(i in KeySetClass.required_keys for i in body.keys()):
         return 'Request body missing keys', 400
 
-    for key in DetectRouteKeys.numeric_keys:
+    for key in KeySetClass.numeric_keys:
         try:
             body[key] = int(body[key])
         except (ValueError, TypeError) as e:
@@ -104,21 +71,22 @@ def zipped_response(zipfilename: str, zippingdir: str) -> Response:
         return resp
 
 
-def do_multiprocess(path, name, ext, dirpath, options):
+def do_multiprocess(path: str, name: str, ext: str, dirpath: str, options: FaceDetectOptions):
     with open(path, 'rb') as i:
         process_image_data(i.read(), name, ext, dirpath, options)
+
 
 @app.post('/detectall')
 def detectall():
     body = request.json
 
-    body, error = validate_body(body)
+    body, error = validate_body(body, DetectRouteKeys)
     if error is not None:
         return body, error
 
-    options = ProcessOptions.frombody(body)
+    options = FaceDetectOptions.frombody(body)
 
-    job_id = str(uuid.uuid4())
+    job_id = next_job_id()
 
     dirpath = os.path.join('.', 'output', job_id)
     archive = os.path.join('.', 'output', job_id + '-archive')
@@ -155,48 +123,35 @@ def detectall():
                         print('completed {}'.format(result))
 
         resp = zipped_response(archive, dirpath)
-        shutil.rmtree(dirpath)
-        os.unlink(archive + '.zip')
         return resp
     except FileNameError as e:
-        if os.path.isdir(dirpath):
-            shutil.rmtree(dirpath)
-        if os.path.exists(archive + '.zip'):
-            os.unlink(archive + '.zip')
         if os.environ["DEBUG"]:
             raise e
         return 'A file in your zip archive has an invalid name', 400
     except ValueError as e:
+        if os.environ["DEBUG"]:
+            raise e
+        return 'Invalid zip file', 400
+    except Exception as e:
+        if os.environ["DEBUG"]:
+            raise e
+        return 'Could not process request', 499
+    finally:
         if os.path.isdir(dirpath):
             shutil.rmtree(dirpath)
         if os.path.exists(archive + '.zip'):
             os.unlink(archive + '.zip')
-        if os.environ["DEBUG"]:
-            raise e
-        return 'Invalid zip file', 400
-
-    except Exception as e:
-        shutil.rmtree(dirpath)
-        if os.path.exists(archive + '.zip'):
-            os.unlink(archive + '.zip')
-        if os.environ["DEBUG"]:
-            raise e
-        return 'Could not process request', 499
-
-
-class FileNameError(ValueError, OSError):
-    pass
 
 
 @app.post('/detect')
 def detect():
     body = request.json
 
-    body, error = validate_body(body)
+    body, error = validate_body(body, DetectRouteKeys)
     if error is not None:
         return body, error
 
-    options = ProcessOptions.frombody(body)
+    options = FaceDetectOptions.frombody(body)
 
     try:
         try:
@@ -229,12 +184,65 @@ def detect():
     except ValueError as e:
         return 'Invalid image file', 400
     except Exception as e:
-        print(e)
+        return 'Could not process request', 499
+    finally:
         if os.path.isdir(dirpath):
             shutil.rmtree(dirpath)
         if os.path.exists(archive + '.zip'):
             os.unlink(archive + '.zip')
+
+
+@app.post('/do-shrink')
+def do_shrink():
+
+    body = request.json
+
+    body, error = validate_body(body, ShrinkRouteKeys)
+    if error is not None:
+        print(body, error)
+        return body, error
+
+    options = ShrinkOptions.frombody(body)
+
+    try:
+        try:
+            image = base64.urlsafe_b64decode(body['imagedata'])
+        except binascii.Error as e:
+            raise ValueError from e
+
+        name, ext = get_name_and_extension(body['filename'])
+
+        assert '..' not in ext and all(i == '.' or i.isalnum() for i in ext)
+        if '..' in name or '/' in name or '..' in ext or '/' in ext:
+            raise FileNameError()
+
+        job_id = str(uuid.uuid4())
+        dirpath = os.path.join('.', 'output', job_id)
+        archive = os.path.join('.', 'output', job_id + '-archive')
+        ensure_dir(dirpath)
+
+        result = resize_image_bytes(image, options.newwidth, options.newheight)
+
+        if result is None:
+            resp = 'Could not shrink image', 500
+        else:
+            cv2.imwrite(os.path.join(dirpath, '{}-shrunk{}'.format(name, ext)), result)
+            resp = zipped_response(archive, dirpath)
+
+        return resp
+    except FileNameError:
+        return 'Invalid file name', 400
+    except InvalidImageSizeError:
+        return 'The Image Size cannot be 0x0', 400
+    except ValueError as e:
+        return 'Invalid image file', 400
+    except Exception as e:
         return 'Could not process request', 499
+    finally:
+        if os.path.isdir(dirpath):
+            shutil.rmtree(dirpath)
+        if os.path.exists(archive + '.zip'):
+            os.unlink(archive + '.zip')
 
 
 @app.get('/')
@@ -243,6 +251,20 @@ def index():
         return f.read()
 
 
+@app.get('/shrink')
+def shrink():
+    with open('static/shrink.html') as f:
+        return f.read()
+
+
 if __name__ == '__main__':
     from waitress import serve
-    serve(app, host='0.0.0.0', port=8000)
+
+    t = threading.Thread(target=lambda: serve(app, host='0.0.0.0', port=8000))
+    t.start()
+    if 'DEBUG' not in os.environ:
+        if 'darwin' in sys.platform:
+            webbrowser.MacOSXOSAScript('Safari').open('localhost:8000', 2)
+        else:
+            webbrowser.open_new_tab('localhost:8000')
+    t.join()

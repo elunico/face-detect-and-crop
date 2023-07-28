@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+
+  <title>Face Detect and Crop</title>
+  <style>
+    body {
+      font-family: Helvetica Neue, Helvetica, FreeSans, Free Sans, Alte Haas Grotesk, sans-serif;
+    }
+
+    .step-holder {
+      border: 2px solid black;
+      border-bottom: 1px solid black;
+      /* margin: 15px 0; */
+      padding: 15px;
+    }
+
+    .instruction {
+      border: 2px solid black;
+      border-bottom: 1px solid black;
+      font-family: Helvetica Neue, Helvetica, FreeSans, Free Sans, Alte Haas Grotesk, sans-serif;
+      font-style: italic;
+      /* margin: 15px 0; */
+      padding: 15px;
+    }
+  </style>
+  <script src="static/common.js" defer>
+
+  </script>
+  <script src="static/shrink.js" defer>
+
+  </script>
+</head>
+
+<body>
+  <h1>Shrink an Image</h1>
+
+  <div class="step-holder">
+    <div class="step" id="step0">Submission</div>
+    <select name="batch" id="batch">
+      <option value="zippedfolder">Zipped Folder</option>
+      <option value="file">Single File</option>
+    </select>
+  </div>
+
+  <div class="step-holder">
+    <div class="step" id="step1">1. Choose an image file</div>
+    <input type="file" name="image" id="image" accept=".zip">
+  </div>
+
+  <div class="instruction">
+    You can leave either height or width as 0 and the value for that field will be calculated automatically based on the
+    proportions of the original image and the specified new dimension
+  </div>
+
+  <div class="step-holder">
+    <div class="step" id="step2">2. Specify the new height</div>
+    <input type="number" name="newheight" id="newheight" value="0">
+  </div>
+
+  <div class="step-holder">
+    <div class="step" id="step3">3. Specify the new width</div>
+    <input type="number" name="newwidth" id="newwidth" value="0">
+  </div>
+
+
+  <button id="gobutton">Go!</button>
+
+  <div id="statusResponse">
+
+  </div>
+
+  <a hidden id="downloader" download="box" href=""></a>
+</body>
+
+</html>
