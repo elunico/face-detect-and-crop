@@ -2,6 +2,7 @@ from tkinter import *
 from tkinter import messagebox, Tk, Label, Button
 import os.path
 
+
 class GUIProgress:
     def __init__(self, text, total, title, main_label, job_gate_variable):
         self.window = Tk()
@@ -69,8 +70,35 @@ def bind(fn, *args, **kwargs):
     return lambda: fn(*args, **kwargs)
 
 
+def appsupportdir():
+    windows = r'%APPDATA%\Local'
+    windows = os.path.expandvars(windows)
+    if not 'APPDATA' in windows:
+        return windows
+
+    user_directory = os.path.expanduser('~')
+
+    macos = os.path.join(user_directory, 'Library', 'Application Support')
+    if os.path.exists(macos):
+        return macos
+
+    linux = os.path.join(user_directory, '.local', 'share')
+    if os.path.exists(linux):
+        return linux
+
+    return user_directory
+
+
+def pathinappsupportdir(*paths):
+    relative = os.path.join(*paths)
+
+    dir = appsupportdir()
+
+    return os.path.join(dir, relative)
+
+
 def yesorno(title, text, once_identifier=None, denyButton='Cancel', acceptButton='OK', exitOnNo=True):
-    folder = os.path.expandvars(r'%APPDATA%\facedetect\yesnosingle')
+    folder = pathinappsupportdir('facedetect', 'yesnosingle')
     if not os.path.isdir(folder):
         try:
             os.makedirs(folder)
@@ -121,6 +149,7 @@ class YesNoStatus:
     def cancel(self):
         self.status = 'cancel'
 
+
 class SimpleContainer:
     def __init__(self, value):
         self.value = value
@@ -135,12 +164,13 @@ class SimpleContainer:
 def percentFor(i, total):
     return int((i / total) * 100)
 
+
 def license_agreement(id):
     yesorno(title='License Agreement', text='''
         THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
-        WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
-        IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, 
-        WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE 
+        WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+        IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+        WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
         OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
         If you accept the terms, you will not be asked again.

@@ -5,18 +5,8 @@
   <meta charset="UTF-8">
 
   <title>Face Detect and Crop</title>
-  <style>
-    body {
-      font-family: Helvetica Neue, Helvetica, FreeSans, Free Sans, Alte Haas Grotesk, sans-serif;
-    }
+  <link rel="stylesheet" href="static/common.css">
 
-    .step-holder {
-      border: 2px solid black;
-      border-bottom: 1px solid black;
-      /* margin: 15px 0; */
-      padding: 15px;
-    }
-  </style>
 
   <script src="static/common.js" defer>
 
@@ -28,16 +18,24 @@
 <body>
   <h1>Face Detect and Crop</h1>
 
+  <div class="linked" id="shrink-link">
+    Go to the <a href="/shrink">shrink webpage</a>
+  </div>
+
   <div class="step-holder">
-    <div class="step" id="step0">Submission</div>
+    <div class="step" id="step0">Choose what to shrink</div>
     <select name="batch" id="batch">
       <option value="zippedfolder">Zipped Folder</option>
       <option value="file">Single File</option>
     </select>
+    <div class="instruction">
+      The ZIP file you provide must be flat. This zip file must contain the images themselves and cannot
+      the images in a subfolder
+    </div>
   </div>
 
   <div class="step-holder">
-    <div class="step" id="step1">1. Choose an image file</div>
+    <div class="step" id="step1">1. Choose the file to act on</div>
     <input type="file" name="image" id="image" accept=".zip">
   </div>
 

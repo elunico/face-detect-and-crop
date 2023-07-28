@@ -1,0 +1,23 @@
+body {
+  font-family: Helvetica Neue, Helvetica, FreeSans, Free Sans, Alte Haas Grotesk, sans-serif;
+}
+
+.linked {
+  margin-bottom: 1em;
+}
+
+.step-holder {
+  border: 2px solid black;
+  border-bottom: 1px solid black;
+  /* margin: 15px 0; */
+  padding: 15px;
+}
+
+.instruction {
+  /* border: 2px solid black; */
+  /* border-bottom: 1px solid black; */
+  font-family: Helvetica Neue, Helvetica, FreeSans, Free Sans, Alte Haas Grotesk, sans-serif;
+  font-style: italic;
+  /* margin: 15px 0; */
+  padding: 15px 2px;
+}
