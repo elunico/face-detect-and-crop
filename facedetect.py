@@ -31,6 +31,9 @@ def parse_args():
     ap.add_argument('-v', '--verbose', action='store_true', help='Produce incremental output for monitoring')
     ap.add_argument('-q', '--quiet', action='store_true', help='Produce no ouptut unless there is an exception')
     ap.add_argument('-z', '--squeeze', action='store_true', help='Fit the output boxes to the ASPECT ratio for Rediker by growing boxes until they are the approximate aspect ratio of 190x237 but not NOT actually change the size')
+    ap.add_argument('--multiplier', type=int, default=1, help='If resize is specified, resize to the given multiplier of Rediker size')
+    ap.add_argument('--minheight', type=int, default=0, help='Discard any faces detected whose bounding box has a height smaller than that specified here')
+    ap.add_argument('--minwidth', type=int, default=0, help='Discard any faces detected whose bounding box has a width smaller than that specified here')
     gp = ap.add_mutually_exclusive_group()
     gp.add_argument('-p', '--pad', action='store_true', help='Fit the output boxes to the 190x237 shape for Rediker by adding white padding and shrinking. implies -r')
     gp.add_argument('-r', '--resize', action='store_true', help='Resize the image to be 190x237 plainly as it is. Can be combined with -z to prevent excess distortion when resizing')
@@ -259,7 +262,7 @@ def vsay(msg, end="\n"):
 def do_multiprocess(filename, subdir, name, ext, options):
     try:
         pixels = cv2.imread(filename)
-        pixels = main_for_file(pixels, drawOnly=options.box, limit=options.max, squeeze=options.squeeze)
+        pixels = main_for_file(pixels, drawOnly=options.box, limit=options.max, squeeze=options.squeeze, pad=options.pad, resize=options.resize, min_box_height=options.minheight, min_box_width=options.minwidth, multiplier=1 if not options.resize and not options.pad else options.multiplier)
         if not options.nowrite:
             for idx, box in enumerate(pixels):
                 if idx >= options.max:
@@ -311,7 +314,7 @@ def main():
         vsay(f"[-] Processing file: {options.file}...")
         try:
             pixels = cv2.imread(options.file)
-            pixels = main_for_file(pixels, drawOnly=options.box, limit=options.max, squeeze=options.squeeze)
+            pixels = main_for_file(pixels, drawOnly=options.box, limit=options.max, squeeze=options.squeeze, min_box_height=options.minheight, min_box_width=options.minwidth, pad=options.pad, resize=options.resize, multiplier=1 if not options.resize and not options.pad else options.multiplier)
             if not options.nowrite:
                 for idx, box in enumerate(pixels):
                     if idx >= options.max:
