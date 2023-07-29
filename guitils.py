@@ -71,9 +71,9 @@ def bind(fn, *args, **kwargs):
 
 
 def appsupportdir():
-    windows = r'%APPDATA%\Local'
+    windows = r'%APPDATA%'
     windows = os.path.expandvars(windows)
-    if not 'APPDATA' in windows:
+    if 'APPDATA' not in windows:
         return windows
 
     user_directory = os.path.expanduser('~')
@@ -89,12 +89,13 @@ def appsupportdir():
     return user_directory
 
 
-def pathinappsupportdir(*paths):
-    relative = os.path.join(*paths)
+def pathinappsupportdir(*paths, create=False):
+    location = os.path.join(appsupportdir(), *paths)
 
-    dir = appsupportdir()
+    if create:
+        os.makedirs(location)
 
-    return os.path.join(dir, relative)
+    return location
 
 
 def yesorno(title, text, once_identifier=None, denyButton='Cancel', acceptButton='OK', exitOnNo=True):

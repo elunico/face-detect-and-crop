@@ -1,5 +1,9 @@
 
-class FaceDetectOptions:
+class FDOptionsBase:
+    ...  # typing
+
+
+class FaceDetectOptions(FDOptionsBase):
     @classmethod
     def frombody(cls, body):
         return cls(
@@ -30,7 +34,7 @@ class FaceDetectOptions:
         self.minh = minh
 
 
-class ShrinkOptions:
+class ShrinkOptions(FDOptionsBase):
     @classmethod
     def frombody(cls, body):
         return cls(newheight=body['newheight'], newwidth=body['newwidth'])
