@@ -20,7 +20,7 @@ verbose = False
 
 def parse_args():
     ap = argparse.ArgumentParser()
-    gp = ap.add_mutually_exclusive_group(required=True)
+    gp = ap.add_mutually_exclusive_group()
     gp.add_argument('-g', '--gui', help='Open a gui version of the program. Ignores all other options', action='store_true')
     gp.add_argument('-d', '--directory', help='Detect faces and crop all photos in the given directory')
     gp.add_argument('-f', '--file', help='Detect faces and crop the given photo')
@@ -37,7 +37,10 @@ def parse_args():
     gp = ap.add_mutually_exclusive_group()
     gp.add_argument('-p', '--pad', action='store_true', help='Fit the output boxes to the 190x237 shape for Rediker by adding white padding and shrinking. implies -r')
     gp.add_argument('-r', '--resize', action='store_true', help='Resize the image to be 190x237 plainly as it is. Can be combined with -z to prevent excess distortion when resizing')
-    return ap.parse_args()
+    options = ap.parse_args()
+    if not options.gui and not options.file and not options.directory:
+        options.gui = True
+    return options
 
 
 def get_name_and_extension(filename: str) -> Tuple[str, str]:

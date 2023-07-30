@@ -251,7 +251,8 @@ def main():
                             print("Error: {}".format(result))
 
     else:
-        messagebox.showerror("No Selection", "No File or Folder was selected")
+        # messagebox.showerror("No Selection", "No File or Folder was selected")
+        pass
 
 
 if __name__ == '__main__':

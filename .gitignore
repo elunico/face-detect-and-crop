@@ -6,3 +6,5 @@ cropped
 .idea
 __pycache__
 output/
+build/
+dist/
